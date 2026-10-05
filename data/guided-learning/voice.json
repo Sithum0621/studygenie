@@ -1,0 +1,14 @@
+{
+  "friend": "යාලුවේ",
+  "letsThink": "හිතන්නකෝ",
+  "intro": "{hello}{topic_title} ගැන ටිකක් කතා කරමුද?",
+  "explainLead": "{picture}",
+  "checkLead": "",
+  "clarifyLead": "ඕකේ {friend}, තව ටිකක් සරලව බලමු.",
+  "questionLead": "හොඳ ප්‍රශ්නයක් {friend}.",
+  "wrongLead": "ටිකක් වෙනස් විදිහට බලමු {friend}. කමක් නැහැ.",
+  "praise": "ඒක හරි {friend}.",
+  "nextUnlock": "ඊළඟට මේකත් බලමු — {next_title}.",
+  "unitDone": "මේ කොටස ඉවරයි {friend}. තව මොකක්ද අහන්න ඕන නම් අහන්න.",
+  "stay": ""
+}

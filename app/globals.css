@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f3ec;
+  --foreground: #1c1917;
+  --year-bar-track: #e7e5e4;
+  --year-bar-fill: linear-gradient(90deg, #2dd4bf 0%, #14b8a6 55%, #0f766e 100%);
+  --year-bar-tick: rgb(28 25 23 / 0.4);
+  --year-bar-tick-hover: #1c1917;
+  --year-bar-event: #ea580c;
+  --growth-track: #e7e5e4;
+  --growth-fill: #0f766e;
+  --growth-slow: #f59e0b;
+  --growth-mid: #14b8a6;
+  --growth-fast: #0d9488;
+  --growth-needle: #1c1917;
+  --growth-hub: #292524;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), var(--font-sinhala);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  min-height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), var(--font-sinhala), Arial, Helvetica, sans-serif;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes study-pulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.06);
+  }
+}
+
+@keyframes study-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+.study-orb {
+  animation: study-pulse 2.2s ease-in-out infinite;
+  box-shadow:
+    0 10px 22px rgb(15 118 110 / 0.38),
+    0 0 0 4px rgb(255 255 255 / 0.9);
+}
+
+.study-orb-active {
+  animation-duration: 1.6s;
+  box-shadow:
+    0 12px 26px rgb(15 118 110 / 0.5),
+    0 0 0 4px rgb(255 255 255 / 0.95);
+}
+
+.study-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid rgb(45 212 191 / 0.7);
+  animation: study-ring 2s ease-out infinite;
+  pointer-events: none;
 }
