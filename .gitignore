@@ -38,9 +38,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — never commit, including .env.example
 .env*
-!.env.example
+
+# Next.js / Cursor agent notes (local only)
+AGENTS.md
+CLAUDE.md
+
+# local PDF → corpus helper
+/process_pdfs.py
 
 # vercel
 .vercel

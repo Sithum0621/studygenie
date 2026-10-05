@@ -8,7 +8,6 @@ Placeholder UI — final look later change karanna puluwan. App text eka Singlis
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
@@ -42,7 +41,7 @@ Dev mode eke service worker register karanne naha (hot reload narak karanna epa 
 
 ## Env
 
-`.env.example` template eka. Real keys `.env.local` eke (git ignore). Production eke same names hosting dashboard eke.
+Keys `.env.local` eke (git ignore). Production eke same names hosting dashboard eke.
 
 - `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` — client
 - `AI_API_KEY` — server only (`/api/tutor`, `/api/generate`)

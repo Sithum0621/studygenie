@@ -15,7 +15,7 @@ Secret / service role key **app eke or `.env.local` public vars walin danna epa*
 
 ## 2. Env file eka
 
-Local eke project root eke `.env.local` hadanna (`.env.example` copy karanna):
+Local eke project root eke `.env.local` hadanna:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
