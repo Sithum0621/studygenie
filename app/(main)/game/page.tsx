@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AnswerReveal, Button, Card, PageHeader } from "@/components/ui";
+import { AnswerReveal, Banner, Button, Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { pickGameQuestions } from "@/lib/game";
+import { fetchGameQuestions } from "@/lib/game";
 import { useCopy, useLanguage } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
 import type { QuizQuestion } from "@/lib/types";
@@ -18,19 +18,34 @@ export default function GamePage() {
   const [revealed, setRevealed] = useState(false);
   const [correct, setCorrect] = useState(0);
   const [score, setScore] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const current = questions[index];
   const playing = questions.length > 0 && score == null && current;
 
-  function start() {
-    setQuestions(
-      pickGameQuestions(8, language, user?.medium ?? "sinhala", user?.subjects ?? []),
-    );
-    setIndex(0);
-    setSelected(null);
-    setRevealed(false);
-    setCorrect(0);
+  async function start() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
     setScore(null);
+    setQuestions([]);
+    try {
+      const next = await fetchGameQuestions(8, language, user);
+      if (!next.length) {
+        setError(copy.somethingWentWrong);
+        return;
+      }
+      setQuestions(next);
+      setIndex(0);
+      setSelected(null);
+      setRevealed(false);
+      setCorrect(0);
+    } catch {
+      setError(copy.somethingWentWrong);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function choose(optionIndex: number) {
@@ -71,8 +86,9 @@ export default function GamePage() {
       {!playing && score == null ? (
         <Card className="space-y-4">
           <p className="text-sm text-stone-600">{copy.gameHint}</p>
-          <Button className="w-full" onClick={start}>
-            {copy.playGame}
+          {error ? <Banner>{error}</Banner> : null}
+          <Button className="w-full" onClick={() => void start()} disabled={busy}>
+            {busy ? copy.generating : copy.playGame}
           </Button>
         </Card>
       ) : null}
@@ -138,8 +154,8 @@ export default function GamePage() {
         <Card className="space-y-3">
           <p className="text-sm text-stone-500">{copy.yourScore}</p>
           <p className="text-4xl font-semibold">{score}%</p>
-          <Button className="w-full" onClick={start}>
-            {copy.playAgain}
+          <Button className="w-full" onClick={() => void start()} disabled={busy}>
+            {busy ? copy.generating : copy.playAgain}
           </Button>
         </Card>
       ) : null}

@@ -411,7 +411,7 @@ create table if not exists public.study_paper_questions (
 create table if not exists public.study_paper_attempts (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
-  paper_id text not null,
+  paper_id text not null references public.study_papers (id) on delete cascade,
   score integer not null default 0,
   time_minutes integer not null default 0,
   answers jsonb not null default '[]'::jsonb,
@@ -464,7 +464,7 @@ create table if not exists public.class_rooms (
 create table if not exists public.class_students (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
-  class_id text not null,
+  class_id text not null references public.class_rooms (id) on delete cascade,
   name text not null default '',
   email text not null default '',
   created_at timestamptz not null default now()
@@ -473,7 +473,7 @@ create table if not exists public.class_students (
 create table if not exists public.class_assignments (
   id text primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
-  class_id text not null,
+  class_id text not null references public.class_rooms (id) on delete cascade,
   title text not null default '',
   details text not null default '',
   due_date date,
@@ -556,6 +556,22 @@ begin
 end;
 $$;
 
+-- Past / model papers are a shared question bank. Every student can read
+-- every MCQ as stored. Writes stay on the owner's user_id.
+drop policy if exists study_papers_read_catalog on public.study_papers;
+create policy study_papers_read_catalog on public.study_papers
+  for select using (kind in ('past', 'model'));
+
+drop policy if exists study_paper_questions_read_catalog on public.study_paper_questions;
+create policy study_paper_questions_read_catalog on public.study_paper_questions
+  for select using (
+    exists (
+      select 1 from public.study_papers p
+      where p.id = paper_id
+        and p.kind in ('past', 'model')
+    )
+  );
+
 -- Interactive Guided Learning (LMS + AI Tutor). Also in supabase/guided-learning.sql
 create table if not exists public.curriculum_topics (
   id text primary key,
@@ -616,10 +632,27 @@ create policy own_learning_state on public.student_learning_state
   using (student_id = auth.uid()::text)
   with check (student_id = auth.uid()::text);
 
+create table if not exists public.student_completed_topics (
+  student_id text not null,
+  unit_id text not null default '',
+  topic_id text not null references public.curriculum_topics (id) on delete cascade,
+  completed_at timestamptz not null default now(),
+  primary key (student_id, unit_id, topic_id)
+);
+
+alter table public.student_completed_topics enable row level security;
+drop policy if exists own_completed_topics on public.student_completed_topics;
+create policy own_completed_topics on public.student_completed_topics
+  for all
+  using (student_id = auth.uid()::text)
+  with check (student_id = auth.uid()::text);
+
 -- MCQ paper → private poll links (also supabase/mcq-polls.sql)
+-- questions/votes jsonb is a cache; rows live in child tables.
 create table if not exists public.mcq_polls (
   id text primary key,
   share_code text not null unique,
+  owner_id uuid references auth.users (id) on delete set null,
   title text not null default '',
   file_name text not null default '',
   questions jsonb not null default '[]'::jsonb,
@@ -627,7 +660,48 @@ create table if not exists public.mcq_polls (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.mcq_poll_questions (
+  id text primary key,
+  poll_id text not null references public.mcq_polls (id) on delete cascade,
+  prompt text not null default '',
+  options text[] not null default '{}',
+  answer_index integer not null default 0,
+  sort_order integer not null default 0
+);
+
+create table if not exists public.mcq_poll_votes (
+  id text primary key,
+  poll_id text not null references public.mcq_polls (id) on delete cascade,
+  voter_key text not null,
+  created_at timestamptz not null default now(),
+  unique (poll_id, voter_key)
+);
+
+create table if not exists public.mcq_poll_vote_answers (
+  vote_id text not null references public.mcq_poll_votes (id) on delete cascade,
+  question_id text not null references public.mcq_poll_questions (id) on delete cascade,
+  option_index integer not null default 0,
+  primary key (vote_id, question_id)
+);
+
+create table if not exists public.teacher_polls (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  poll_id text not null references public.mcq_polls (id) on delete cascade,
+  title text not null default '',
+  share_code text not null,
+  file_name text not null default '',
+  question_count integer not null default 0,
+  vote_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (user_id, poll_id)
+);
+
 alter table public.mcq_polls enable row level security;
+alter table public.mcq_poll_questions enable row level security;
+alter table public.mcq_poll_votes enable row level security;
+alter table public.mcq_poll_vote_answers enable row level security;
+alter table public.teacher_polls enable row level security;
 
 drop policy if exists mcq_polls_read on public.mcq_polls;
 create policy mcq_polls_read on public.mcq_polls
@@ -641,4 +715,42 @@ drop policy if exists mcq_polls_update on public.mcq_polls;
 create policy mcq_polls_update on public.mcq_polls
   for update using (true) with check (true);
 
+drop policy if exists mcq_poll_questions_read on public.mcq_poll_questions;
+create policy mcq_poll_questions_read on public.mcq_poll_questions
+  for select using (true);
+drop policy if exists mcq_poll_questions_write on public.mcq_poll_questions;
+create policy mcq_poll_questions_write on public.mcq_poll_questions
+  for all using (true) with check (true);
+
+drop policy if exists mcq_poll_votes_read on public.mcq_poll_votes;
+create policy mcq_poll_votes_read on public.mcq_poll_votes
+  for select using (true);
+drop policy if exists mcq_poll_votes_write on public.mcq_poll_votes;
+create policy mcq_poll_votes_write on public.mcq_poll_votes
+  for all using (true) with check (true);
+
+drop policy if exists mcq_poll_vote_answers_read on public.mcq_poll_vote_answers;
+create policy mcq_poll_vote_answers_read on public.mcq_poll_vote_answers
+  for select using (true);
+drop policy if exists mcq_poll_vote_answers_write on public.mcq_poll_vote_answers;
+create policy mcq_poll_vote_answers_write on public.mcq_poll_vote_answers
+  for all using (true) with check (true);
+
+drop policy if exists own_teacher_polls on public.teacher_polls;
+create policy own_teacher_polls on public.teacher_polls
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 create index if not exists mcq_polls_code_idx on public.mcq_polls (share_code);
+create index if not exists mcq_polls_owner_idx on public.mcq_polls (owner_id);
+create index if not exists mcq_poll_questions_poll_idx
+  on public.mcq_poll_questions (poll_id, sort_order);
+create index if not exists mcq_poll_votes_poll_idx
+  on public.mcq_poll_votes (poll_id);
+create index if not exists teacher_polls_user_idx
+  on public.teacher_polls (user_id, created_at desc);
+create index if not exists class_students_class_idx
+  on public.class_students (class_id);
+create index if not exists class_assignments_class_idx
+  on public.class_assignments (class_id);
+create index if not exists study_paper_attempts_paper_idx
+  on public.study_paper_attempts (paper_id);

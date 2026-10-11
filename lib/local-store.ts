@@ -85,6 +85,7 @@ const STUDENT_KEYS = [
   "lessonProgress",
   "guidedLearningState",
   "gameSessions",
+  "recentQuestionFingerprints",
   "dailyTaskPlan",
   "classRooms",
   "classStudents",
@@ -115,6 +116,15 @@ export const localStore = {
   setSessionId(id: string | null) {
     if (id) write("session", id);
     else localStorage.removeItem(PREFIX + "session");
+  },
+  isDemo() {
+    return read<boolean>("demo", false);
+  },
+  setDemo(on: boolean) {
+    withLocalOnly(() => {
+      if (on) write("demo", true);
+      else localStorage.removeItem(PREFIX + "demo");
+    });
   },
   getNotes() {
     return read<NoteItem[]>("notes", []);
@@ -282,6 +292,12 @@ export const localStore = {
   },
   saveGameSessions(items: GameSession[]) {
     write("gameSessions", items);
+  },
+  getRecentQuestionFingerprints() {
+    return read<string[]>("recentQuestionFingerprints", []);
+  },
+  saveRecentQuestionFingerprints(items: string[]) {
+    write("recentQuestionFingerprints", items);
   },
   getClasses() {
     return read<ClassRoom[]>("classRooms", []);

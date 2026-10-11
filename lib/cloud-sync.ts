@@ -3,6 +3,7 @@
 import { createClient } from "./supabase/client";
 import { isSupabaseConfigured } from "./supabase/config";
 import { localStore, setCloudSaveHandler, withLocalOnly } from "./local-store";
+import { setDbPapers } from "./papers";
 import type {
   DailyQuizAttempt,
   DailyQuizSet,
@@ -25,6 +26,7 @@ import type {
   ClassAssignment,
   SyllabusChunk,
   StudentLearningState,
+  McqPollSummary,
 } from "./types";
 
 const timers = new Map<string, number>();
@@ -275,6 +277,21 @@ async function pushGuidedState(userId: string, items: StudentLearningState[]) {
       completed_topic_ids: item.completedTopicIds,
     })),
   );
+  for (const item of rows) {
+    await supabase
+      .from("student_completed_topics")
+      .delete()
+      .eq("student_id", userId)
+      .eq("unit_id", item.unitId);
+    if (!item.completedTopicIds.length) continue;
+    await supabase.from("student_completed_topics").insert(
+      item.completedTopicIds.map((topicId) => ({
+        student_id: userId,
+        unit_id: item.unitId,
+        topic_id: topicId,
+      })),
+    );
+  }
 }
 
 async function pullGuidedState(userId: string): Promise<StudentLearningState[]> {
@@ -287,6 +304,16 @@ async function pullGuidedState(userId: string): Promise<StudentLearningState[]> 
     )
     .eq("student_id", userId);
   if (error || !data) return [];
+  const { data: done } = await supabase
+    .from("student_completed_topics")
+    .select("unit_id, topic_id")
+    .eq("student_id", userId);
+  const byUnit = new Map<string, string[]>();
+  for (const row of done || []) {
+    const list = byUnit.get(row.unit_id) || [];
+    list.push(row.topic_id);
+    byUnit.set(row.unit_id, list);
+  }
   return data
     .filter((row) => row.unit_id && row.current_topic_id)
     .map((row) => ({
@@ -297,7 +324,9 @@ async function pullGuidedState(userId: string): Promise<StudentLearningState[]> 
       clarificationCount: row.clarification_count || 0,
       lastInteraction: row.last_interaction,
       usedAnalogyIndexes: row.used_analogy_indexes || [],
-      completedTopicIds: row.completed_topic_ids || [],
+      completedTopicIds: byUnit.get(row.unit_id)?.length
+        ? byUnit.get(row.unit_id)!
+        : row.completed_topic_ids || [],
     }));
 }
 
@@ -341,8 +370,18 @@ async function pushStudyTime(userId: string, state: StudyTimeState) {
 async function pushPapers(userId: string, items: PaperItem[]) {
   const supabase = client();
   if (!supabase) return;
-  await replaceOwned("study_papers", userId, items.map((item) => item.id));
-  if (!items.length) return;
+  const mine = items.filter((item) => item.kind === "own");
+  const { data: existing } = await supabase
+    .from("study_papers")
+    .select("id, kind")
+    .eq("user_id", userId);
+  const keep = new Set(mine.map((item) => item.id));
+  const drop = (existing || [])
+    .filter((row) => row.kind === "own" && !keep.has(row.id))
+    .map((row) => row.id);
+  if (drop.length) await supabase.from("study_papers").delete().in("id", drop);
+  if (!mine.length) return;
+  items = mine;
   await supabase.from("study_papers").upsert(
     items.map((item) => ({
       id: item.id,
@@ -484,6 +523,26 @@ async function pushClassStudents(userId: string, items: ClassStudent[]) {
   );
 }
 
+async function pushTeacherPolls(userId: string, items: McqPollSummary[]) {
+  const supabase = client();
+  if (!supabase) return;
+  await replaceOwned("teacher_polls", userId, items.map((item) => item.id));
+  if (!items.length) return;
+  await supabase.from("teacher_polls").upsert(
+    items.map((item) => ({
+      id: item.id,
+      user_id: userId,
+      poll_id: item.id,
+      title: item.title,
+      share_code: item.code,
+      file_name: item.fileName,
+      question_count: item.questionCount,
+      vote_count: item.voteCount,
+      created_at: item.createdAt,
+    })),
+  );
+}
+
 async function pushSyllabusChunks(userId: string, items: SyllabusChunk[]) {
   const supabase = client();
   if (!supabase) return;
@@ -577,8 +636,10 @@ function onLocalSave(key: string, value: unknown) {
       await pushClassStudents(userId, value as ClassStudent[]);
     } else if (key === "classAssignments") {
       await pushClassAssignments(userId, value as ClassAssignment[]);
-    } else if (key === "syllabusChunks") {
+    }     else if (key === "syllabusChunks") {
       await pushSyllabusChunks(userId, value as SyllabusChunk[]);
+    } else if (key === "classPolls") {
+      await pushTeacherPolls(userId, value as McqPollSummary[]);
     }
   });
 }
@@ -693,6 +754,7 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
     classStudents,
     classAssignments,
     syllabusChunks,
+    teacherPolls,
   ] = await Promise.all([
     pullNotes(userId),
     pullQuizzes(userId),
@@ -746,7 +808,6 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
     client()
       ?.from("study_papers")
       .select("*")
-      .eq("user_id", userId)
       .then((res) => res.data || []),
     client()
       ?.from("study_paper_attempts")
@@ -804,6 +865,12 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
       .select("*")
       .eq("user_id", userId)
       .then((res) => res.data || []),
+    client()
+      ?.from("teacher_polls")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .then((res) => res.data || []),
   ]);
 
   const cloudHasAnything = Boolean(
@@ -813,7 +880,8 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
       progress ||
       (uploads && uploads.length) ||
       (chats && chats.length) ||
-      (classRooms && classRooms.length),
+      (classRooms && classRooms.length) ||
+      (teacherPolls && teacherPolls.length),
   );
 
   if (!cloudHasAnything) {
@@ -831,14 +899,16 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
       )?.data || []
     : [];
 
-  const paperQuestions =
-    (
-      await client()
-        ?.from("study_paper_questions")
-        .select("*")
-        .eq("user_id", userId)
-        .order("sort_order")
-    )?.data || [];
+  const paperIds = (papers || []).map((row) => row.id);
+  const paperQuestions = paperIds.length
+    ? (
+        await client()
+          ?.from("study_paper_questions")
+          .select("*")
+          .in("paper_id", paperIds)
+          .order("sort_order")
+      )?.data || []
+    : [];
 
   const guidedRows = await pullGuidedState(userId);
 
@@ -933,17 +1003,23 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
         list.push(fromQuestion(row));
         byPaper.set(row.paper_id, list);
       }
-      localStore.savePapers(
-        papers.map((row) => ({
-          id: row.id,
-          kind: row.kind,
-          title: row.title,
-          subject: row.subject,
-          year: row.year || undefined,
-          createdAt: row.created_at,
-          questions: byPaper.get(row.id) || [],
-        })),
+      const mapped = papers.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        title: row.title,
+        subject: row.subject,
+        year: row.year || undefined,
+        createdAt: row.created_at,
+        questions: byPaper.get(row.id) || [],
+      }));
+      setDbPapers(
+        mapped.filter(
+          (item) =>
+            (item.kind === "past" || item.kind === "model") &&
+            item.questions.length > 0,
+        ),
       );
+      localStore.savePapers(mapped.filter((item) => item.kind === "own"));
     }
     if (paperAttempts?.length) {
       localStore.savePaperAttempts(
@@ -1073,6 +1149,19 @@ export async function hydrateFromCloud(options?: { pushIfEmpty?: boolean }) {
         })),
       );
     }
+    if (teacherPolls?.length) {
+      localStore.saveMcqPolls(
+        teacherPolls.map((row) => ({
+          id: row.id,
+          code: row.share_code,
+          title: row.title,
+          fileName: row.file_name || "",
+          questionCount: row.question_count || 0,
+          voteCount: row.vote_count || 0,
+          createdAt: row.created_at,
+        })),
+      );
+    }
   });
   } catch {
     return;
@@ -1100,6 +1189,7 @@ async function pushAllLocal(userId: string) {
   await pushClassAssignments(userId, localStore.getClassAssignments());
   await pushSyllabusChunks(userId, localStore.getSyllabusChunks());
   await pushGuidedState(userId, localStore.getGuidedLearningState());
+  await pushTeacherPolls(userId, localStore.getMcqPolls());
 }
 
 export function startCloudSync() {

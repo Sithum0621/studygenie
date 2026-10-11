@@ -11,12 +11,14 @@ export function DailyQuizTab({
   score,
   dailyStreak,
   preparing = false,
+  waitingOnline = false,
 }: {
   topic: string;
   done: boolean;
   score: number | null;
   dailyStreak: number;
   preparing?: boolean;
+  waitingOnline?: boolean;
 }) {
   const copy = useCopy();
   const lit = litFires(dailyStreak);
@@ -63,6 +65,8 @@ export function DailyQuizTab({
             {copy.dailyQuizDone}
             {score != null ? ` · ${score}%` : ""}
           </p>
+        ) : waitingOnline ? (
+          <p className="text-sm text-stone-600">{copy.dailyQuizWaitingOnline}</p>
         ) : preparing ? (
           <p className="text-sm text-stone-600">{copy.dailyQuizPreparing}</p>
         ) : (

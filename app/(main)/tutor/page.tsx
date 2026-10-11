@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Button, PageHeader, Textarea } from "@/components/ui";
+import { Button, PageHeader, Textarea } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCopy, useLanguage } from "@/lib/language-context";
 import { buildStudentSnapshot } from "@/lib/student-context";
@@ -14,7 +14,6 @@ export default function TutorPage() {
   const { user } = useAuth();
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   async function sendText(text: string) {
@@ -35,7 +34,6 @@ export default function TutorPage() {
         student: buildStudentSnapshot(user, text),
         messages: next,
       });
-      if (data.demo) setDemoAi(true);
       setMessages([
         ...next,
         {
@@ -69,13 +67,11 @@ export default function TutorPage() {
           className="shrink-0 py-2"
           onClick={() => {
             setMessages([]);
-            setDemoAi(false);
           }}
         >
           {copy.newChat}
         </Button>
       </div>
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
       <div className="min-h-64 space-y-3">
         {messages.length === 0 ? (
           <div className="space-y-3">

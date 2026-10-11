@@ -6,7 +6,6 @@ import { ArrowLeft } from "lucide-react";
 import { HomePaperTabs } from "@/components/home-paper-tabs";
 import {
   AnswerReveal,
-  Banner,
   Button,
   Card,
   Field,
@@ -21,10 +20,7 @@ import { useCopy, useLanguage } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
 import {
   latestAttemptFor,
-  paperSubjects,
-  paperYears,
   papersByKind,
-  papersMatching,
   saveCustomPaper,
 } from "@/lib/papers";
 import { buildStudentSnapshot } from "@/lib/student-context";
@@ -50,11 +46,8 @@ export default function PapersPage() {
   const [startedAt, setStartedAt] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [subject, setSubject] = useState(subjects[0] || "Science");
-  const [filterSubject, setFilterSubject] = useState("");
-  const [filterYear, setFilterYear] = useState("");
   const [count, setCount] = useState(10);
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const selectClass =
@@ -73,19 +66,10 @@ export default function PapersPage() {
   }, [tab, tick]);
 
   const current = active?.questions[index];
-  const kindSubjects = useMemo(
-    () => (tab === "own" ? [] : paperSubjects(tab)),
-    [tab, papers],
+  const listed = useMemo(
+    () => papers.filter((item) => item.kind === "own"),
+    [papers],
   );
-  const kindYears = useMemo(
-    () => (tab === "own" || !filterSubject ? [] : paperYears(tab, filterSubject)),
-    [tab, filterSubject, papers],
-  );
-  const listed = useMemo(() => {
-    if (tab === "own") return papers.filter((item) => item.kind === "own");
-    if (!filterSubject || !filterYear) return [];
-    return papersMatching(tab, filterSubject, filterYear);
-  }, [papers, tab, filterSubject, filterYear]);
   const subjectOptions = [...new Set([...subjects, ...DAILY_SUBJECTS])];
   const wrong =
     revealed && selected != null && current
@@ -97,8 +81,6 @@ export default function PapersPage() {
     setActive(null);
     setScore(null);
     setRevealed(false);
-    setFilterSubject("");
-    setFilterYear("");
     window.history.replaceState(null, "", `/papers?tab=${next}`);
   }
 
@@ -160,7 +142,6 @@ export default function PapersPage() {
     const topicText = sanitizeText(prompt, 200);
     if (!topicText) return;
     setBusy(true);
-    setDemoAi(false);
     setError(null);
     try {
       const res = await fetch("/api/generate", {
@@ -183,7 +164,6 @@ export default function PapersPage() {
         setError(copy.somethingWentWrong);
         return;
       }
-      if (data.demo) setDemoAi(true);
       const questions = (data.questions || []).map((question) => ({
         ...question,
         subject: question.subject || subject,
@@ -228,13 +208,12 @@ export default function PapersPage() {
                 ? copy.modelPapers
                 : copy.pastPapers
           }
-          hint={tab === "own" ? copy.createOwnHint : copy.pickSubjectYear}
+          hint={tab === "own" ? copy.createOwnHint : copy.comingSoon}
         />
       </div>
 
       <HomePaperTabs active={tab} onSelect={selectTab} />
 
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
 
       {active && score == null && current ? (
         <Card className="space-y-4">
@@ -334,39 +313,11 @@ export default function PapersPage() {
       ) : null}
 
       {!active && tab !== "own" ? (
-        <Card className="grid gap-3 sm:grid-cols-2">
-          <Field label={copy.subject}>
-            <select
-              value={filterSubject}
-              onChange={(e) => {
-                setFilterSubject(e.target.value);
-                setFilterYear("");
-              }}
-              className={selectClass}
-            >
-              <option value="">{copy.selectSubject}</option>
-              {kindSubjects.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={copy.paperYear}>
-            <select
-              value={filterYear}
-              disabled={!filterSubject}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">{copy.selectYear}</option>
-              {kindYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <Card className="space-y-2 py-10 text-center">
+          <p className="text-lg font-semibold text-teal-800">{copy.comingSoon}</p>
+          <p className="mx-auto max-w-md text-sm text-stone-600">
+            {copy.papersComingSoon}
+          </p>
         </Card>
       ) : null}
 
@@ -411,35 +362,29 @@ export default function PapersPage() {
         </Card>
       ) : null}
 
-      {!active ? (
+      {!active && tab === "own" ? (
         <div className="space-y-3">
-          {tab !== "own" && (!filterSubject || !filterYear) ? (
-            <p className="text-sm text-stone-500">{copy.pickSubjectYear}</p>
-          ) : listed.length === 0 && tab !== "own" ? (
-            <p className="text-sm text-stone-500">{copy.noPapers}</p>
-          ) : (
-            listed.map((paper) => {
-              const last = latestAttemptFor(paper.id);
-              return (
-                <Card key={paper.id} className="space-y-3">
-                  <div>
-                    <p className="font-medium">{paper.title}</p>
-                    <p className="text-sm text-stone-500">
-                      {paper.subject}
-                      {paper.year ? ` · ${paper.year}` : ""}
-                      {` · ${copy.questionCount.replace("{n}", String(paper.questions.length))}`}
-                      {last
-                        ? ` · ${copy.lastPaperScore.replace("{n}", String(last.score))}`
-                        : ""}
-                    </p>
-                  </div>
-                  <Button className="w-full" onClick={() => start(paper)}>
-                    {copy.startPaper}
-                  </Button>
-                </Card>
-              );
-            })
-          )}
+          {listed.map((paper) => {
+            const last = latestAttemptFor(paper.id);
+            return (
+              <Card key={paper.id} className="space-y-3">
+                <div>
+                  <p className="font-medium">{paper.title}</p>
+                  <p className="text-sm text-stone-500">
+                    {paper.subject}
+                    {paper.year ? ` · ${paper.year}` : ""}
+                    {` · ${copy.questionCount.replace("{n}", String(paper.questions.length))}`}
+                    {last
+                      ? ` · ${copy.lastPaperScore.replace("{n}", String(last.score))}`
+                      : ""}
+                  </p>
+                </div>
+                <Button className="w-full" onClick={() => start(paper)}>
+                  {copy.startPaper}
+                </Button>
+              </Card>
+            );
+          })}
         </div>
       ) : null}
     </div>

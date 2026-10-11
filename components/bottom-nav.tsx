@@ -2,10 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gamepad2, Home, ListTodo, Sparkles, UserRound } from "lucide-react";
+import {
+  BookOpen,
+  FilePlus2,
+  FileText,
+  Gamepad2,
+  Home,
+  ListTodo,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
 import { useCopy } from "@/lib/language-context";
+import { useWorkspace } from "@/lib/workspace-context";
 
-const ITEMS = [
+const STUDENT_ITEMS = [
   { href: "/home", labelKey: "navHome" as const, icon: Home },
   { href: "/tasks", labelKey: "navTasks" as const, icon: ListTodo },
   { href: "/study", labelKey: "navStudy" as const, icon: Sparkles, special: true },
@@ -13,22 +23,51 @@ const ITEMS = [
   { href: "/bio", labelKey: "navBio" as const, icon: UserRound },
 ];
 
+const TEACHER_ITEMS = [
+  { href: "/class", labelKey: "navHome" as const, icon: Home },
+  { href: "/class/papers", labelKey: "teacherPapers" as const, icon: FileText },
+  {
+    href: "/class/papers/create",
+    labelKey: "navCreatePaper" as const,
+    icon: FilePlus2,
+    special: true,
+  },
+  { href: "/class/classes", labelKey: "classes" as const, icon: BookOpen },
+  { href: "/bio", labelKey: "navBio" as const, icon: UserRound },
+];
+
+function navActive(pathname: string, href: string) {
+  if (href === "/class") return pathname === "/class";
+  if (href === "/class/papers") {
+    return (
+      pathname === "/class/papers" ||
+      (pathname.startsWith("/class/papers/") &&
+        !pathname.startsWith("/class/papers/create"))
+    );
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function BottomNav() {
   const copy = useCopy();
   const pathname = usePathname();
+  const { workspace } = useWorkspace();
+  const items = workspace === "classgenie" ? TEACHER_ITEMS : STUDENT_ITEMS;
+  const wide = workspace === "classgenie";
 
   return (
     <nav
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40"
       aria-label="Main"
     >
-      <div className="pointer-events-auto mx-auto max-w-lg">
+      <div
+        className={`pointer-events-auto mx-auto ${wide ? "max-w-3xl" : "max-w-lg"}`}
+      >
         <div className="relative overflow-visible border-t border-stone-200 bg-white/95 px-1 pt-5 shadow-[0_-8px_24px_rgb(28_25_23/0.08)] backdrop-blur-md pb-[max(0.55rem,env(safe-area-inset-bottom))]">
           <div className="grid grid-cols-5 items-end">
-            {ITEMS.map((item) => {
+            {items.map((item) => {
               const Icon = item.icon;
-              const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const active = navActive(pathname, item.href);
               if (item.special) {
                 return (
                   <Link

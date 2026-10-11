@@ -6,6 +6,7 @@ export type Workspace = "studygenie" | "classgenie";
 
 type WorkspaceContextValue = {
   workspace: Workspace;
+  ready: boolean;
   setWorkspace: (workspace: Workspace) => void;
 };
 
@@ -21,10 +22,12 @@ function readStoredWorkspace(): Workspace {
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [workspace, setWorkspaceState] = useState<Workspace>("studygenie");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
       setWorkspaceState(readStoredWorkspace());
+      setReady(true);
     }, 0);
     return () => window.clearTimeout(id);
   }, []);
@@ -32,12 +35,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       workspace,
+      ready,
       setWorkspace(next) {
         setWorkspaceState(next);
         localStorage.setItem(STORAGE_KEY, next);
       },
     }),
-    [workspace],
+    [ready, workspace],
   );
 
   return (

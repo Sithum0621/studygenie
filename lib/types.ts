@@ -311,3 +311,15 @@ export type McqPollSummary = {
   voteCount: number;
   createdAt: string;
 };
+
+export type PollQuestionStat = {
+  id: string;
+  number: number;
+  prompt: string;
+  options: string[];
+  answerIndex: number;
+  counts: number[];
+  answered: number;
+  wrongCount: number;
+  wrongPct: number;
+};

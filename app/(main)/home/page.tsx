@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BookOpen, Layers, MessageCircle, Paperclip, ListChecks, Map } from "lucide-react";
+import { BookOpen, MessageCircle, ListChecks, Map } from "lucide-react";
 import { DailyQuizTab } from "@/components/daily-quiz-tab";
 import { GrowthSpeedMeter } from "@/components/growth-speed-meter";
 import { HomeInsightSlider } from "@/components/home-insight-slider";
@@ -15,6 +15,7 @@ import { loadDailyQuestions } from "@/lib/daily-questions-db";
 import {
   getCachedDailyQuiz,
   isDailyQuizGenerating,
+  isDailyQuizWaitingOnline,
   onDailyQuizChange,
 } from "@/lib/daily-quiz-job";
 import { growthSpeed } from "@/lib/growth";
@@ -31,8 +32,6 @@ export default function HomePage() {
     { href: "/tutor", label: copy.tutor, icon: MessageCircle },
     { href: "/notes", label: copy.notes, icon: BookOpen },
     { href: "/quiz", label: copy.quiz, icon: ListChecks },
-    { href: "/flashcards", label: copy.flashcards, icon: Layers },
-    { href: "/uploads", label: copy.uploads, icon: Paperclip },
   ];
   const [progress, setProgress] = useState<ProgressState>({
     streak: 0,
@@ -45,17 +44,19 @@ export default function HomePage() {
   const [today, setToday] = useState("2026-01-01");
   const [mixLabel, setMixLabel] = useState("");
   const [preparing, setPreparing] = useState(false);
+  const [waitingOnline, setWaitingOnline] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     const id = window.setTimeout(() => {
-      const now = new Date();
-      const ymd = toYmd(now);
-      setToday(ymd);
       setProgress(localStore.touchStreak());
       const refreshMix = () => {
+        const ymd = toYmd(new Date());
+        setToday(ymd);
         const aiSet = getCachedDailyQuiz(ymd, language);
-        setPreparing(!aiSet && isDailyQuizGenerating());
+        const waiting = !aiSet && isDailyQuizWaitingOnline();
+        setWaitingOnline(waiting);
+        setPreparing(!aiSet && (isDailyQuizGenerating() || waiting));
         if (aiSet) {
           setMixLabel(quizSubjectSummary(aiSet.questions));
           return;
@@ -91,6 +92,7 @@ export default function HomePage() {
           score={done ? progress.lastQuizScore : null}
           dailyStreak={progress.dailyStreak ?? 0}
           preparing={preparing}
+          waitingOnline={waitingOnline}
         />
         <GrowthSpeedMeter value={growthSpeed(progress, today)} />
       </div>

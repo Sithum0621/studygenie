@@ -49,6 +49,7 @@ export function AppSidebar() {
 
   const teacherLinks = [
     { href: "/class", label: copy.teacherHome, icon: Home },
+    { href: "/class/papers", label: copy.teacherPapers, icon: FileText },
     { href: "/class/classes", label: copy.classes, icon: BookOpen },
     { href: "/class/students", label: copy.students, icon: Users },
     { href: "/class/assignments", label: copy.assignments, icon: ClipboardList },

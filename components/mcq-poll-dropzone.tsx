@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { FileUp, LoaderCircle } from "lucide-react";
 import { Banner, Button, Card, Input, Textarea } from "@/components/ui";
+import { PollShareDialog } from "@/components/poll-share-actions";
 import { useCopy } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
+import { saveTeacherPoll } from "@/lib/poll-share";
 import type { McqPollQuestion, McqPollSummary } from "@/lib/types";
 import {
   inspectPollUpload,
@@ -28,7 +30,6 @@ export function McqPollDropzone() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<McqPollSummary | null>(null);
-  const [copied, setCopied] = useState(false);
   const [polls, setPolls] = useState<McqPollSummary[]>([]);
   const [origin, setOrigin] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
@@ -45,7 +46,6 @@ export function McqPollDropzone() {
 
   async function handleFile(file: File | null) {
     setError(null);
-    setCopied(false);
     setCreated(null);
     const check = await inspectPollUpload(file);
     if (!check.ok || !file) {
@@ -101,11 +101,7 @@ export function McqPollDropzone() {
         setError(copy.pollExtractFail);
         return;
       }
-      const next = [
-        data.poll,
-        ...localStore.getMcqPolls().filter((row) => row.id !== data.poll!.id),
-      ];
-      localStore.saveMcqPolls(next);
+      const next = saveTeacherPoll(data.poll);
       setPolls(next);
       setCreated(data.poll);
       setDraft(null);
@@ -113,16 +109,6 @@ export function McqPollDropzone() {
       setError(copy.pollExtractFail);
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function copyLink(code: string) {
-    const url = `${origin}/p/${code}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    } catch {
-      setCopied(false);
     }
   }
 
@@ -187,22 +173,13 @@ export function McqPollDropzone() {
         />
         {error ? <Banner>{error}</Banner> : null}
         {created ? (
-          <div className="space-y-2 rounded-xl bg-teal-50 px-3 py-3">
-            <p className="text-sm font-medium text-teal-900">{copy.pollLinkReady}</p>
-            <p className="break-all text-xs text-teal-800">
-              {origin}/p/{created.code}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void copyLink(created.code)}>
-                {copied ? copy.pollCopied : copy.pollCopyLink}
-              </Button>
-              <a href={`/p/${created.code}`} target="_blank" rel="noreferrer">
-                <Button type="button" variant="outline">
-                  {copy.pollOpen}
-                </Button>
-              </a>
-            </div>
-          </div>
+          <PollShareDialog
+            poll={created}
+            origin={origin}
+            open
+            onClose={() => setCreated(null)}
+            onSaved={setPolls}
+          />
         ) : null}
       </Card>
 
@@ -253,42 +230,6 @@ export function McqPollDropzone() {
         </Card>
       ) : null}
 
-      <Card className="space-y-3">
-        <p className="text-sm font-medium text-stone-800">{copy.pollRecent}</p>
-        {polls.length ? (
-          <ul className="space-y-2">
-            {polls.map((poll) => (
-              <li
-                key={poll.id}
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{poll.title}</p>
-                  <p className="text-xs text-stone-500">
-                    {poll.questionCount} {copy.pollQuestions} · {poll.voteCount}{" "}
-                    {copy.pollVotes}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="px-3 py-2 text-xs"
-                  onClick={() => void copyLink(poll.code)}
-                >
-                  {copy.pollCopyLink}
-                </Button>
-                <a href={`/p/${poll.code}`} target="_blank" rel="noreferrer">
-                  <Button type="button" variant="ghost" className="px-3 py-2 text-xs">
-                    {copy.pollOpen}
-                  </Button>
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-stone-500">{copy.pollEmpty}</p>
-        )}
-      </Card>
     </div>
   );
 }

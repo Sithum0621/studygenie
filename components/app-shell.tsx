@@ -3,8 +3,10 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { BottomNav } from "@/components/bottom-nav";
+import { FirstVisitGuide } from "@/components/first-visit-guide";
 import { useAuth } from "@/lib/auth-context";
 import { startDailyQuizBackgroundJob } from "@/lib/daily-quiz-job";
+import { loadCatalogPapersFromDb } from "@/lib/paper-catalog";
 import { useLanguage } from "@/lib/language-context";
 import { startStudyTimeTracker } from "@/lib/study-time";
 import { useWorkspace } from "@/lib/workspace-context";
@@ -35,12 +37,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { language } = useLanguage();
   const { workspace } = useWorkspace();
   const wide = pathname.startsWith("/class");
-  const showBar = workspace === "studygenie" && !wide;
+  const showBar =
+    workspace === "classgenie" ||
+    (workspace === "studygenie" && !wide);
 
   useEffect(() => {
     if (!user || workspace !== "studygenie") {
       return;
     }
+    void loadCatalogPapersFromDb();
     return startDailyQuizBackgroundJob(user, language);
   }, [language, user, workspace]);
 
@@ -59,6 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     >
       <div className="px-4 py-6 pb-8">{children}</div>
       {showBar ? <BottomNav /> : null}
+      {user ? <FirstVisitGuide /> : null}
     </div>
   );
 }

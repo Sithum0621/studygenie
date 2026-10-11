@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Banner, Button, Card, Field, Input, PageHeader } from "@/components/ui";
+import { Button, Card, Field, Input, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCopy, useLanguage } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
@@ -20,7 +20,6 @@ export default function FlashcardsPage() {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function generate() {
@@ -47,7 +46,6 @@ export default function FlashcardsPage() {
         setError(copy.somethingWentWrong);
         return;
       }
-      if (data.demo) setDemoAi(true);
       const next = data.cards || [];
       setCards(next);
       setIndex(0);
@@ -87,7 +85,6 @@ export default function FlashcardsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title={copy.flashTitle} hint={copy.flashHint} />
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
       <Field label={copy.topic}>
         <Input maxLength={200} value={topic} onChange={(e) => setTopic(e.target.value)} />
       </Field>

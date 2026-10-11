@@ -58,3 +58,5 @@ next-env.d.ts
 # local guided-learning sqlite
 /data/guided-learning/*.db
 /data/mcq-polls/
+
+.vercel

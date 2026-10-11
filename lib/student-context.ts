@@ -13,6 +13,7 @@ import type {
   StudyMedium,
 } from "./types";
 import { collectStudyFocuses } from "./study-chats";
+import { loadLessonProgressList } from "./study-progress";
 import {
   collectStudentActivity,
   formatStudentActivity,
@@ -34,6 +35,12 @@ export type StudentSnapshot = {
   papers: string[];
   noteTopics: string[];
   studyFocus: StudyFocus[];
+  learnedLessons: {
+    title: string;
+    current: string;
+    percent: number;
+    doneParts: string[];
+  }[];
   activity: StudentActivity;
   sources: { title: string; kind: string; text: string }[];
 };
@@ -96,6 +103,14 @@ export function buildStudentSnapshot(
       ),
     ].slice(0, 8),
     studyFocus: collectStudyFocuses(),
+    learnedLessons: loadLessonProgressList()
+      .slice(0, 6)
+      .map((row) => ({
+        title: row.title,
+        current: row.parts[row.currentIndex]?.title || row.title,
+        percent: row.percent,
+        doneParts: row.parts.filter((part) => part.done).map((part) => part.title),
+      })),
     activity: collectStudentActivity(),
     sources: retrieveSyllabusChunks({
       query:
@@ -152,6 +167,16 @@ export function formatStudentSnapshot(snapshot: StudentSnapshot) {
     `Uploaded papers / files: ${papers}`,
     `Saved notes topics: ${notes}`,
     `Study chatbot — subject parts and current level (use this for Daily Quiz): ${study}`,
+    snapshot.learnedLessons?.length
+      ? `Lessons they are learning now: ${snapshot.learnedLessons
+          .map(
+            (row) =>
+              `${row.title} (now: ${row.current}, ${row.percent}%${
+                row.doneParts.length ? `; done: ${row.doneParts.join(", ")}` : ""
+              })`,
+          )
+          .join("; ")}`
+      : "Lessons they are learning now: none started yet",
     snapshot.sources?.length
       ? `Uploaded NIE / teacher-guide chunks in use: ${snapshot.sources
           .map((row) => row.title)
@@ -218,6 +243,18 @@ export const studentSnapshotSchema = z.object({
         level: z.string(),
       }),
     )
+    .optional()
+    .default([]),
+  learnedLessons: z
+    .array(
+      z.object({
+        title: z.string().max(160),
+        current: z.string().max(160),
+        percent: z.number().min(0).max(100),
+        doneParts: z.array(z.string().max(140)).max(16),
+      }),
+    )
+    .max(6)
     .optional()
     .default([]),
   activity: z
@@ -290,6 +327,7 @@ export function parseStudentSnapshot(input: unknown): StudentSnapshot {
       papers: [],
       noteTopics: [],
       studyFocus: [],
+      learnedLessons: [],
       sources: [],
       activity: {
         dailyQuizDoneToday: false,
@@ -414,10 +452,29 @@ ${formatStudentSnapshot(snapshot)}
 ${syllabusContext(snapshot, topic)}`;
 }
 
+function avoidQuestionBlock(avoidPrompts: string[]) {
+  const lines = avoidPrompts
+    .map((prompt) => prompt.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((prompt, index) => `${index + 1}. ${prompt.slice(0, 160)}`);
+  if (!lines.length) return "No previous questions listed.";
+  return `Do NOT repeat, translate, or lightly paraphrase these:\n${lines.join("\n")}`;
+}
+
+function studyPartsLine(snapshot: StudentSnapshot) {
+  return snapshot.studyFocus.length
+    ? snapshot.studyFocus
+        .map((row) => `${row.subject} — ${row.topic} (level: ${row.level})`)
+        .join("; ")
+    : "none yet";
+}
+
 export function dailyQuizUserPrompt(
   snapshot: StudentSnapshot,
   date: string,
   language: AppLanguage = "singlish",
+  avoidPrompts: string[] = [],
 ) {
   const subjects = "Science";
   const langRule = educationalLanguageRules(
@@ -425,17 +482,13 @@ export function dailyQuizUserPrompt(
     language,
     "questions",
   );
+  const study = studyPartsLine(snapshot);
 
-  const study = snapshot.studyFocus.length
-    ? snapshot.studyFocus
-        .map((row) => `${row.subject} — ${row.topic} (level: ${row.level})`)
-        .join("; ")
-    : "none yet";
-
-  return `Create TODAY's personal Daily Quiz for ${date}.
+  return `Create TODAY's personal Daily Quiz for ${date}. Variety seed: ${date}-${study.slice(0, 80)}.
 Use the Sri Lanka syllabus map below for unit names and topic points.
-Use the student's study chatbot history FIRST: the subject parts they asked about and their current level.
+Use the student's CURRENT lessons and study chatbot history FIRST.
 Then use Grade 11 Science results, uploaded Science papers, and weak Science areas.
+This set must be NEW. ${avoidQuestionBlock(avoidPrompts)}
 
 Study chatbot level / parts (PRIMARY):
 ${study}
@@ -446,13 +499,54 @@ Return ONLY JSON:
 Rules:
 - 3 to 5 multiple-choice questions (prefer 3 if few weak topics, else 5)
 - All questions MUST be Grade 11 Science only. Do not mix other subjects. Units from: ${subjects}
-- If study chatbot history exists, most questions MUST be about those exact parts/topics
+- If they have current lessons / study history, MOST questions MUST be about those exact parts, but with a NEW wording and a NEW trap
+- If they just finished a part, include 1 question from that done part and the rest from the part they are on NOW
 - Match their current level: starting/confused = foundations; some-idea = mixed; exam-ready = harder
 - Prefer weak syllabus topics when they exist
 - 4 options each, one correct. Options are short phrases only — never a paragraph
 - Every question MUST include a separate "explanation" field: 1-2 sentences why the correct option is right. Do not start the text with the word Explanation. This is NOT the correct answer itself
 - Put the correct option at a RANDOM index (0-3). Do NOT put the correct answer first on every question. Mix 1st/2nd/3rd/4th across the set. answerIndex must match that option.
 - School exam style for grade / level: ${snapshot.grade || "unknown"}
+- ${langRule}
+
+Student facts:
+${formatStudentSnapshot(snapshot)}
+
+${syllabusContext(snapshot, study)}`;
+}
+
+export function gameQuizUserPrompt(
+  snapshot: StudentSnapshot,
+  language: AppLanguage = "singlish",
+  avoidPrompts: string[] = [],
+  roundId = "",
+) {
+  const langRule = educationalLanguageRules(
+    snapshot.medium,
+    language,
+    "questions",
+  );
+  const study = studyPartsLine(snapshot);
+
+  return `Create a NEW 8-question Grade 11 Science game round.
+Round id: ${roundId || Date.now()}.
+Use the student's CURRENT lessons first, then weak areas, then nearby syllabus topics.
+Every question must be different from the daily quiz and from previous game rounds.
+${avoidQuestionBlock(avoidPrompts)}
+
+Study parts (PRIMARY):
+${study}
+
+Return ONLY JSON:
+{"questions":[{"id":"g1","subject":"Science","prompt":"...","options":["A","B","C","D"],"answerIndex":2,"explanation":"..."}]}
+
+Rules:
+- Exactly 8 multiple-choice questions
+- Grade 11 Science only
+- Do not reuse today's Daily Quiz stems
+- Mix difficulty if they have some-idea or exam-ready parts
+- 4 short options, one correct, random answerIndex
+- explanation: 1-2 sentences, not inside an option
 - ${langRule}
 
 Student facts:
@@ -514,18 +608,17 @@ MUST include Daily Quiz every day (kind "daily-quiz"), even if they already did 
 Then decide the rest from their data:
 - Study chatbot focus / weak areas: which SUBJECT and which PART to learn today (kind "study")
 - Games: how many rounds they still need this week (kind "game"). If they already played enough, skip game.
-- Past papers: yes or no today (kind "past-paper"). Skip if they did one today or it is too soon.
-- Model papers: yes or no today (kind "model-paper"). Skip if not useful yet.
-Use quiz scores, paper attempts, game rounds, study time, and exam date.
+Do NOT add past-paper or model-paper tasks. Those sections are coming soon.
+Use quiz scores, game rounds, study time, and exam date.
 The whole list should take about 30 minutes. If scores/time show they are slower, keep the 30-minute cap with lighter tasks.
 
-If the student sent a blocker note, CHANGE the plan around that. Example: no time for past papers → drop past-paper, keep Daily Quiz, maybe add a shorter study or game task.
+If the student sent a blocker note, CHANGE the plan around that. Example: no time for games → drop game, keep Daily Quiz, maybe add a shorter study task.
 Do not scold. Keep 4 to 6 tasks. First task must be daily-quiz.
 
 Return ONLY JSON:
 {"note":"one short coach line","tasks":[{"kind":"daily-quiz","title":"...","subject":"Mix","topic":"","why":"...","done":false},{"kind":"study","title":"...","subject":"Science","topic":"Newton first law","why":"...","done":false}]}
 
-kind must be one of: daily-quiz, study, game, past-paper, model-paper
+kind must be one of: daily-quiz, study, game
 title = what to do today, in the SAME mixed language as the language rules (Sinhala Unicode + English school words, not Latin Singlish)
 why = one short reason from their data, same mixed language
 ${langRule}

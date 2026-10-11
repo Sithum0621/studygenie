@@ -1,4 +1,14 @@
+import {
+  hasSinhalaScript,
+  hasTamilScript,
+} from "./content-language";
+import type { AppLanguage } from "./copy";
+import { shuffleQuestionOptions } from "./daily-questions";
 import { localStore } from "./local-store";
+import {
+  dropSeenQuestions,
+  uniqueQuestions,
+} from "./question-memory";
 import type { PaperItem, PaperKind, QuizQuestion } from "./types";
 
 function q(
@@ -354,11 +364,30 @@ function sortYears(years: string[]) {
   );
 }
 
+let dbPapers: PaperItem[] = [];
+
+export function setDbPapers(items: PaperItem[]) {
+  dbPapers = items;
+}
+
 export function loadPapers() {
   const stored = localStore.getPapers();
-  const seeds = seedPapers();
-  const seedIds = new Set(seeds.map((seed) => seed.id));
-  return [...seeds, ...stored.filter((item) => !seedIds.has(item.id))];
+  const catalog = dbPapers;
+  const catalogIds = new Set(catalog.map((item) => item.id));
+  const storedIds = new Set(stored.map((item) => item.id));
+  const hasDbPast = catalog.some((item) => item.kind === "past");
+  const hasDbModel = catalog.some((item) => item.kind === "model");
+  const seeds = seedPapers().filter((seed) => {
+    if (catalogIds.has(seed.id) || storedIds.has(seed.id)) return false;
+    if (seed.kind === "past" && hasDbPast) return false;
+    if (seed.kind === "model" && hasDbModel) return false;
+    return true;
+  });
+  return [
+    ...catalog,
+    ...stored.filter((item) => !catalogIds.has(item.id)),
+    ...seeds,
+  ];
 }
 
 export function saveCustomPaper(paperItem: PaperItem) {
@@ -394,5 +423,111 @@ export function latestAttemptFor(paperId: string) {
       .getPaperAttempts()
       .filter((item) => item.paperId === paperId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  );
+}
+
+function matchesPaperFilter(
+  item: PaperItem,
+  input: {
+    kind?: PaperKind | PaperKind[];
+    subject?: string;
+    year?: string;
+    subjects?: string[];
+  },
+) {
+  const kinds = input.kind
+    ? Array.isArray(input.kind)
+      ? input.kind
+      : [input.kind]
+    : (["past"] as PaperKind[]);
+  if (!kinds.includes(item.kind)) return false;
+  if (input.subject && item.subject !== input.subject) return false;
+  if (input.year && item.year !== input.year) return false;
+  if (input.subjects?.length && !input.subjects.includes(item.subject)) {
+    return false;
+  }
+  return true;
+}
+
+export function paperQuestionPool(input: {
+  kind?: PaperKind | PaperKind[];
+  subject?: string;
+  year?: string;
+  subjects?: string[];
+}): QuizQuestion[] {
+  return loadPapers()
+    .filter((item) => matchesPaperFilter(item, input))
+    .flatMap((item) =>
+      item.questions.map((question, index) => ({
+        ...question,
+        id: question.id || `${item.id}-q${index + 1}`,
+        subject: question.subject || item.subject,
+      })),
+    )
+    .filter((question) => question.prompt.trim() && question.options.length >= 2);
+}
+
+function topicHits(question: QuizQuestion, topics: string[]) {
+  if (!topics.length) return 0;
+  const hay = `${question.subject || ""} ${question.prompt}`.toLowerCase();
+  return topics.reduce((score, topic) => {
+    const words = topic
+      .toLowerCase()
+      .split(/[^a-z0-9\u0d80-\u0dff]+/i)
+      .filter((word) => word.length > 2);
+    return (
+      score +
+      words.reduce((inner, word) => (hay.includes(word) ? inner + 1 : inner), 0)
+    );
+  }, 0);
+}
+
+function languageOk(question: QuizQuestion, language?: AppLanguage) {
+  if (!language) return true;
+  const text = `${question.prompt} ${question.options.join(" ")}`;
+  if (language === "english") return !hasSinhalaScript(text) && !hasTamilScript(text);
+  if (hasTamilScript(text)) return false;
+  return true;
+}
+
+export function quizFromPapers(input: {
+  kind?: PaperKind | PaperKind[];
+  subject?: string;
+  year?: string;
+  subjects?: string[];
+  size: number;
+  language?: AppLanguage;
+  avoid?: string[];
+  topics?: string[];
+  seed?: string;
+  keepOptions?: boolean;
+}): QuizQuestion[] {
+  const pool = uniqueQuestions(
+    dropSeenQuestions(
+      paperQuestionPool(input).filter((question) =>
+        languageOk(question, input.language),
+      ),
+      input.avoid || [],
+    ),
+  );
+  const seed = input.seed || `${input.subject || "mix"}-${input.size}`;
+  let mix = 0;
+  for (const char of seed) mix = (mix * 31 + char.charCodeAt(0)) | 0;
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    mix = (mix * 16807) % 2147483647;
+    const j = Math.abs(mix) % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  shuffled.sort(
+    (a, b) => topicHits(b, input.topics || []) - topicHits(a, input.topics || []),
+  );
+  const picked = (shuffled.length ? shuffled : paperQuestionPool(input)).slice(
+    0,
+    input.size,
+  );
+  if (input.keepOptions) return picked;
+  return picked.map((row, index) =>
+    shuffleQuestionOptions({ ...row, id: `${row.id}_pp_${index}` }),
   );
 }

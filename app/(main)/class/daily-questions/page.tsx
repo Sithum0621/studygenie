@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Field, Input, PageHeader, Textarea } from "@/components/ui";
 import { useCopy } from "@/lib/language-context";
-import { DAILY_SUBJECTS } from "@/lib/daily-questions";
+import {
+  DAILY_SUBJECTS,
+  asDailySubject,
+  type DailySubject,
+} from "@/lib/daily-questions";
 import {
   deleteDailyQuestion,
   loadDailyQuestions,
@@ -13,7 +17,7 @@ import type { DailyQuestion } from "@/lib/types";
 
 const EMPTY_OPTIONS = ["", "", "", ""];
 
-function blankForm(subject = DAILY_SUBJECTS[0]) {
+function blankForm(subject: DailySubject = DAILY_SUBJECTS[0]) {
   return {
     id: "",
     subject,
@@ -83,7 +87,7 @@ export default function DailyQuestionsPage() {
   function edit(item: DailyQuestion) {
     setForm({
       id: item.id,
-      subject: item.subject,
+      subject: asDailySubject(item.subject),
       prompt: item.prompt,
       options: [...item.options, "", "", "", ""].slice(0, 4),
       answerIndex: item.answerIndex,
@@ -108,7 +112,7 @@ export default function DailyQuestionsPage() {
             className="w-full rounded-xl border border-stone-300 bg-white px-3 py-3 text-sm outline-none focus:border-teal-700"
             value={form.subject}
             onChange={(event) =>
-              setForm({ ...form, subject: event.target.value })
+              setForm({ ...form, subject: asDailySubject(event.target.value) })
             }
           >
             {DAILY_SUBJECTS.map((subject) => (

@@ -67,6 +67,18 @@ export default function LoginPage() {
           {copy.login}
         </Button>
       </form>
+      <div className="mt-6 grid grid-cols-2 gap-2">
+        <Link href="/demo/study" className="block">
+          <Button variant="outline" className="w-full">
+            {copy.tryStudyDemo}
+          </Button>
+        </Link>
+        <Link href="/demo/class" className="block">
+          <Button variant="outline" className="w-full">
+            {copy.tryClassDemo}
+          </Button>
+        </Link>
+      </div>
       <p className="mt-6 text-center text-sm text-stone-600">
         {copy.noAccount}{" "}
         <Link href="/signup" className="font-medium text-teal-800">

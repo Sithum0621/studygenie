@@ -14,11 +14,44 @@ import { isSupabaseConfigured } from "./supabase/config";
 import { localStore, clearStudentLocal } from "./local-store";
 import type { Profile } from "./types";
 import { sanitizeText, validateCredentials } from "./validate";
+import type { Workspace } from "./workspace-context";
+
+export const DEMO_STUDENT_ID = "demo-studygenie";
+export const DEMO_TEACHER_ID = "demo-classgenie";
+
+export function demoProfile(workspace: Workspace): Profile {
+  if (workspace === "classgenie") {
+    return {
+      id: DEMO_TEACHER_ID,
+      name: "Demo Teacher",
+      email: "teacher@demo.studygenie",
+      grade: "11",
+      subjects: ["Science"],
+      languageMix: "singlish",
+      medium: "sinhala",
+    };
+  }
+  return {
+    id: DEMO_STUDENT_ID,
+    name: "Demo Student",
+    email: "student@demo.studygenie",
+    grade: "11",
+    subjects: ["Science"],
+    languageMix: "singlish",
+    medium: "sinhala",
+  };
+}
+
+function demoWorkspaceFromId(id: string | null): Workspace {
+  return id === DEMO_TEACHER_ID ? "classgenie" : "studygenie";
+}
 
 type AuthContextValue = {
   user: Profile | null;
   loading: boolean;
   supabaseReady: boolean;
+  isDemo: boolean;
+  enterDemo: (workspace: Workspace) => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (
     name: string,
@@ -78,6 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const boot = async () => {
       try {
+        if (localStore.isDemo()) {
+          setUser(demoProfile(demoWorkspaceFromId(localStore.getSessionId())));
+          return;
+        }
         if (supabaseReady) {
           const supabase = createClient();
           if (!supabase) {
@@ -126,6 +163,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       loading,
       supabaseReady,
+      isDemo: Boolean(user && localStore.isDemo()),
+      async enterDemo(workspace) {
+        stopCloudSync();
+        localStore.setDemo(true);
+        const profile = demoProfile(workspace);
+        localStore.setSessionId(profile.id);
+        setUser(profile);
+      },
       async signIn(email, password) {
         const checked = validateCredentials({ email, password });
         if (!checked.ok) return "Email or password eka wrong. Aye try karanna.";
@@ -139,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             if (error) return publicAuthError(error.message);
             if (data.user) {
+              localStore.setDemo(false);
               const { data: row } = await supabase
                 .from("profiles")
                 .select("name, grade, subjects, medium, language_mix")
@@ -170,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 u.password === checked.password,
             );
           if (!found) return "Email or password eka wrong. Aye try karanna.";
+          localStore.setDemo(false);
           localStore.setSessionId(found.id);
           setUser(profileFromLocal(found.id));
           return null;
@@ -201,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return "Email confirm කරන්න. Inbox එක බලන්න, හෝ Supabase Auth eke Confirm email off කරන්න.";
             }
             if (data.user) {
+              localStore.setDemo(false);
               await supabase.from("profiles").upsert({
                 id: data.user.id,
                 name: safeName,
@@ -253,11 +301,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       async signOut() {
-        if (supabaseReady) {
+        if (supabaseReady && !localStore.isDemo()) {
           const supabase = createClient();
           await supabase?.auth.signOut();
         }
         stopCloudSync();
+        localStore.setDemo(false);
         localStore.setSessionId(null);
         clearStudentLocal();
         setUser(null);

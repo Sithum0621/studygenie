@@ -5,17 +5,24 @@ import type { AppLanguage } from "./copy";
 import {
   normalizeDailyQuizQuestions,
   quizMatchesAppLanguage,
-  scienceDailyFallback,
 } from "./daily-questions";
 import { localStore } from "./local-store";
+import {
+  recentAvoidPrompts,
+  rememberQuestions,
+  uniqueQuestions,
+} from "./question-memory";
+import { pickScienceMcqs } from "./science-mcq-bank";
+import { collectStudyFocuses } from "./study-chats";
 import type { DailyQuizSet, Profile } from "./types";
-import { toYmd } from "./year";
+import { msUntilNextLocalMidnight, toYmd } from "./year";
 
-export const DAILY_QUIZ_STYLE = 9;
+export const DAILY_QUIZ_STYLE = 12;
 
 const listeners = new Set<() => void>();
 let inflight: Promise<DailyQuizSet | null> | null = null;
 let generating = false;
+let waitingOnline = false;
 let startedAt = 0;
 
 function emit() {
@@ -39,6 +46,29 @@ export function isDailyQuizGenerating() {
   return generating;
 }
 
+export function isDailyQuizWaitingOnline() {
+  if (waitingOnline) return true;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return !getCachedDailyQuiz();
+  }
+  return false;
+}
+
+function isNetworkFailure(error: unknown) {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  if (error instanceof TypeError) return true;
+  if (
+    error instanceof DOMException &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  ) {
+    return true;
+  }
+  if (error instanceof Error) {
+    return /failed to fetch|network|timeout|offline|abort/i.test(error.message);
+  }
+  return false;
+}
+
 export function onDailyQuizChange(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -52,15 +82,24 @@ function fallbackSet(
 ): DailyQuizSet {
   const existing = getCachedDailyQuiz(date, language);
   if (existing) return existing;
+  const bank = pickScienceMcqs({
+    language,
+    medium: medium ?? "sinhala",
+    size: 5,
+    seed: date,
+    avoid: recentAvoidPrompts(),
+    topics: collectStudyFocuses().map((row) => row.topic),
+  });
   const set: DailyQuizSet = {
     date,
     language,
     medium: medium ?? "sinhala",
-    questions: scienceDailyFallback(language),
+    questions: uniqueQuestions(bank).slice(0, 5),
     generatedAt: new Date().toISOString(),
     demo,
     styleVersion: DAILY_QUIZ_STYLE,
   };
+  rememberQuestions(set.questions);
   localStore.saveDailyQuizSet(set);
   localStore.saveDailyQuizLock(null);
   return set;
@@ -79,6 +118,8 @@ async function pushDailyQuizRequest(
     body: JSON.stringify({
       language,
       date,
+      purpose: "daily",
+      avoidPrompts: recentAvoidPrompts(),
       student: buildStudentSnapshot(user, user?.subjects?.join(" ")),
     }),
   });
@@ -87,9 +128,10 @@ async function pushDailyQuizRequest(
     date?: string;
     demo?: boolean;
   };
-  const questions = normalizeDailyQuizQuestions(data.questions);
+  const aiQuestions = normalizeDailyQuizQuestions(data.questions);
+  const questions = uniqueQuestions(aiQuestions).slice(0, 5);
   if (!questions.length || !quizMatchesAppLanguage(questions, language)) {
-    return fallbackSet(date, language, user?.medium);
+    return fallbackSet(date, language, user?.medium, Boolean(data.demo));
   }
   const set: DailyQuizSet = {
     date: data.date || date,
@@ -100,6 +142,7 @@ async function pushDailyQuizRequest(
     demo: Boolean(data.demo),
     styleVersion: DAILY_QUIZ_STYLE,
   };
+  rememberQuestions(questions);
   localStore.saveDailyQuizSet(set);
   localStore.saveDailyQuizLock(null);
   return set;
@@ -110,7 +153,14 @@ export function ensureTodayDailyQuiz(user: Profile | null, language: AppLanguage
   const cached = getCachedDailyQuiz(date, language);
   if (cached) {
     generating = false;
+    waitingOnline = false;
     return Promise.resolve(cached);
+  }
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    waitingOnline = true;
+    generating = false;
+    emit();
+    return Promise.resolve(null);
   }
   if (inflight && Date.now() - startedAt < 22_000) return inflight;
   inflight = null;
@@ -119,19 +169,29 @@ export function ensureTodayDailyQuiz(user: Profile | null, language: AppLanguage
   startedAt = Date.now();
   inflight = (async () => {
     generating = true;
+    waitingOnline = false;
     emit();
     try {
       localStore.saveDailyQuizLock({
         date,
         startedAt: new Date().toISOString(),
       });
-      return await pushDailyQuizRequest(user, language, date);
-    } catch {
+      const next = await pushDailyQuizRequest(user, language, date);
+      waitingOnline = false;
+      return next;
+    } catch (error) {
       localStore.saveDailyQuizLock(null);
-      return (
-        getCachedDailyQuiz(date, language, user?.medium) ||
-        fallbackSet(date, language, user?.medium)
-      );
+      const existing = getCachedDailyQuiz(date, language, user?.medium);
+      if (existing) {
+        waitingOnline = false;
+        return existing;
+      }
+      if (isNetworkFailure(error)) {
+        waitingOnline = true;
+        return null;
+      }
+      waitingOnline = false;
+      return fallbackSet(date, language, user?.medium, true);
     } finally {
       generating = false;
       inflight = null;
@@ -151,13 +211,30 @@ export function startDailyQuizBackgroundJob(
   };
   tick();
   const interval = window.setInterval(tick, 60_000);
+  let midnightTimer = 0;
+  const armMidnight = () => {
+    window.clearTimeout(midnightTimer);
+    midnightTimer = window.setTimeout(() => {
+      tick();
+      armMidnight();
+    }, msUntilNextLocalMidnight());
+  };
+  armMidnight();
   const onVisible = () => {
     if (document.visibilityState === "visible") tick();
   };
+  const onOnline = () => tick();
   document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("focus", onOnline);
+  window.addEventListener("pageshow", onOnline);
   return () => {
     window.clearInterval(interval);
+    window.clearTimeout(midnightTimer);
     document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("online", onOnline);
+    window.removeEventListener("focus", onOnline);
+    window.removeEventListener("pageshow", onOnline);
   };
 }
 

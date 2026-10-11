@@ -11,7 +11,6 @@ const mx = {
   eka: u(0x0d91, 0x0d9a),
   eke: u(0x0d91, 0x0d9a, 0x0dda),
   eken: u(0x0d91, 0x0d9a, 0x0dd9, 0x0db1, 0x0dca),
-  ekak: u(0x0d91, 0x0d9a, 0x0d9a, 0x0dca),
   karanna: u(0x0d9a, 0x0dbb, 0x0db1, 0x0dca, 0x0db1),
   hema: u(0x0dc4, 0x0dd0, 0x0db8),
   dawasama: u(0x0daf, 0x0dc0, 0x0dc3, 0x0db8),
@@ -37,12 +36,6 @@ const mx = {
     0x0dba,
     0x0dd2,
   ),
-  balala: u(0x0db6, 0x0dbd, 0x0dbd, 0x0dcf),
-  thawa: u(0x0dad, 0x0dc0),
-  startWela: u(0x0dc0, 0x0dd9, 0x0dbd, 0x0dcf),
-  nehae: u(0x0db1, 0x0dd0, 0x0dc4, 0x0dd0),
-  gihin: u(0x0d9c, 0x0dd2, 0x0dc4, 0x0dd2, 0x0db1),
-  nam: u(0x0db1, 0x0db8, 0x0dca),
 };
 
 export const TASK_HREF: Record<TaskKind, string> = {
@@ -162,52 +155,11 @@ export function mockDailyTasks(
     );
   }
 
-  const pastRecent = activity.pastPapers[0]?.date === date;
-  if (!pastRecent) {
-    tasks.push(
-      makeTask(
-        "past-paper",
-        singlish
-          ? `${subject} past paper ${mx.ekak} try ${mx.karanna}`
-          : `Try a ${subject} past paper`,
-        subject,
-        {
-          why: singlish
-            ? activity.pastPapers.length
-              ? `Last past paper score ${mx.eka} ${mx.balala} practice ${mx.ona}.`
-              : `Past papers ${mx.thawa} start ${mx.startWela} ${mx.nehae}.`
-            : activity.pastPapers.length
-              ? "Recent past paper score needs more practice."
-              : "No past paper yet.",
-        },
-      ),
-    );
-  }
-
-  const modelRecent = activity.modelPapers[0]?.date === date;
-  if (!modelRecent && activity.pastPapers.length > 0) {
-    tasks.push(
-      makeTask(
-        "model-paper",
-        singlish
-          ? `${subject} model paper ${mx.ekak} try ${mx.karanna}`
-          : `Try a ${subject} model paper`,
-        subject,
-        {
-          why: singlish
-            ? `Past paper ${mx.eka} ${mx.gihin} ${mx.nam} model paper ${mx.eken} check ${mx.karanna}.`
-            : "After a past paper, a model paper checks exam style.",
-        },
-      ),
-    );
-  }
-
   const hay = note.toLowerCase();
   return tasks
     .filter((item) => {
+      if (item.kind === "past-paper" || item.kind === "model-paper") return false;
       if (!hay) return true;
-      if (item.kind === "past-paper" && hay.includes("past")) return false;
-      if (item.kind === "model-paper" && hay.includes("model")) return false;
       if (item.kind === "game" && (hay.includes("game") || hay.includes("games"))) {
         return false;
       }
@@ -261,6 +213,7 @@ export function ensureDailyQuiz(tasks: StudyTask[], language: AppLanguage) {
   const seen = new Set<string>(["daily-quiz"]);
   const unique = [first];
   for (const item of rest) {
+    if (item.kind === "past-paper" || item.kind === "model-paper") continue;
     const key = `${item.kind}:${item.subject}:${item.topic || item.title}`;
     if (seen.has(key) || unique.length >= 6) continue;
     seen.add(key);

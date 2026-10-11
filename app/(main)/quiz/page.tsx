@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import {
   AnswerReveal,
-  Banner,
   Button,
   Card,
   Field,
@@ -15,6 +14,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useCopy, useLanguage } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
+import { rememberQuestions, uniqueQuestions } from "@/lib/question-memory";
 import { buildStudentSnapshot } from "@/lib/student-context";
 import { matchSubject } from "@/lib/subject-progress";
 import { setLastStudySubject } from "@/lib/study-time";
@@ -32,7 +32,6 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [score, setScore] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,8 +69,8 @@ export default function QuizPage() {
         setError(copy.somethingWentWrong);
         return;
       }
-      if (data.demo) setDemoAi(true);
-      const qs = data.questions || [];
+      const qs = uniqueQuestions(data.questions || []).slice(0, 8);
+      rememberQuestions(qs);
       setQuestions(qs);
       setAnswers(Array(qs.length).fill(null));
       setLastStudySubject(matchSubject(topicText, user?.subjects ?? []));
@@ -135,7 +134,6 @@ export default function QuizPage() {
         </Link>
         <PageHeader title={copy.quizTitle} hint={copy.quizHint} />
       </div>
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
       {questions.length === 0 || score != null ? (
         <>
           <Field label={copy.topic}>

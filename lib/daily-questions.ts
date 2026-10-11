@@ -32,6 +32,14 @@ export const DAILY_SUBJECTS = [
   "ICT",
 ] as const;
 
+export type DailySubject = (typeof DAILY_SUBJECTS)[number];
+
+export function asDailySubject(value: string): DailySubject {
+  return (DAILY_SUBJECTS as readonly string[]).includes(value)
+    ? (value as DailySubject)
+    : DAILY_SUBJECTS[0];
+}
+
 export function pickMixedQuestions(
   items: DailyQuestion[],
   size = 6,

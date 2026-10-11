@@ -3,6 +3,7 @@ import {
   addVote,
   newVoterKey,
   pollTallies,
+  pollTeacherStats,
   publicQuestions,
   readPoll,
   toSummary,
@@ -35,7 +36,19 @@ export async function GET(request: Request, ctx: Ctx) {
   }
   const voterKey = cookieFrom(request);
   const voted = Boolean(voterKey && poll.votes.some((row) => row.voterKey === voterKey));
-  const wantResults = new URL(request.url).searchParams.get("results") === "1";
+  const search = new URL(request.url).searchParams;
+  if (search.get("stats") === "1") {
+    const stats = pollTeacherStats(poll);
+    return NextResponse.json({
+      poll: toSummary(poll),
+      people: stats.people,
+      scorePct: stats.scorePct,
+      questions: stats.questions,
+      hardest: stats.hardest,
+      easiest: stats.easiest,
+    });
+  }
+  const wantResults = search.get("results") === "1";
   return NextResponse.json({
     poll: toSummary(poll),
     questions: publicQuestions(poll),

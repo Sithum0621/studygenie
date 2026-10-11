@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { History, Plus, Send, Sparkles, X } from "lucide-react";
-import { Banner, Input } from "@/components/ui";
+import { Input } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { refreshDailyQuizFromStudy } from "@/lib/daily-quiz-job";
 import { useCopy, useLanguage } from "@/lib/language-context";
@@ -73,7 +73,6 @@ export default function StudyPage() {
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [mobile, setMobile] = useState(true);
   const [unitId, setUnitId] = useState<string | null>(null);
@@ -120,7 +119,6 @@ export default function StudyPage() {
     setActiveId(null);
     setActiveMessages([]);
     setVisibleCount(PAGE);
-    setDemoAi(false);
     setHistoryOpen(false);
     setUnitId(null);
     setProgress(null);
@@ -219,8 +217,6 @@ export default function StudyPage() {
               getGuidedLearningState(user?.id || "local", current.unitId)
             : undefined,
       });
-      if (data.demo) setDemoAi(true);
-      else setDemoAi(false);
       if (data.guided) {
         const saved = upsertGuidedLearningState({
           ...data.guided,
@@ -406,8 +402,6 @@ export default function StudyPage() {
             </Link>
           </div>
         ) : null}
-        {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
-
         <>
             <div
               ref={listRef}

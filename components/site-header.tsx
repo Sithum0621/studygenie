@@ -20,7 +20,7 @@ function initials(name?: string, email?: string) {
 export function SiteHeader() {
   const copy = useCopy();
   const { user } = useAuth();
-  const { workspace, setWorkspace } = useWorkspace();
+  const { workspace, ready, setWorkspace } = useWorkspace();
   const { openSidebar } = useUi();
   const router = useRouter();
   const pathname = usePathname();
@@ -29,14 +29,22 @@ export function SiteHeader() {
 
   useEffect(() => {
     const publicPaths = ["/", "/login", "/signup", "/offline"];
-    if (!user || publicPaths.includes(pathname) || pathname.startsWith("/p/")) return;
+    if (
+      !ready ||
+      !user ||
+      publicPaths.includes(pathname) ||
+      pathname.startsWith("/p/") ||
+      pathname.startsWith("/demo")
+    ) {
+      return;
+    }
     if (workspace === "classgenie" && !pathname.startsWith("/class") && pathname !== "/profile" && pathname !== "/bio") {
       router.replace("/class");
     }
     if (workspace === "studygenie" && pathname.startsWith("/class")) {
       router.replace("/home");
     }
-  }, [pathname, router, user, workspace]);
+  }, [pathname, ready, router, user, workspace]);
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {

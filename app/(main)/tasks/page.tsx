@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Banner, Button, Card, PageHeader, Textarea } from "@/components/ui";
+import { Button, Card, PageHeader, Textarea } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCopy, useLanguage } from "@/lib/language-context";
 import { buildStudentSnapshot } from "@/lib/student-context";
@@ -24,7 +24,6 @@ export default function TasksPage() {
   const [coach, setCoach] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [date, setDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +42,6 @@ export default function TasksPage() {
         saveTaskPlan({ ...plan, tasks: next });
         setTasks(next);
         setCoach(plan.note || "");
-        setDemoAi(plan.demo);
         return;
       }
       void loadFromAi(today, "");
@@ -87,7 +85,6 @@ export default function TasksPage() {
         generatedAt: new Date().toISOString(),
         demo: Boolean(data.demo),
       });
-      setDemoAi(Boolean(data.demo));
       setTasks(merged);
       setCoach(data.note || "");
     } catch {
@@ -105,7 +102,6 @@ export default function TasksPage() {
     <div className="space-y-5">
       <PageHeader title={copy.tasksTitle} hint={copy.tasksHint} />
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
       {coach ? <p className="text-sm text-stone-600">{coach}</p> : null}
       {busy && tasks.length === 0 ? (
         <p className="text-sm text-stone-500">{copy.tasksPreparing}</p>

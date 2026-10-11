@@ -36,6 +36,12 @@ export function toYmd(date: Date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
+export function msUntilNextLocalMidnight(from = new Date()) {
+  const next = new Date(from);
+  next.setHours(24, 0, 0, 0);
+  return Math.max(250, next.getTime() - from.getTime());
+}
+
 export function parseYmd(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);

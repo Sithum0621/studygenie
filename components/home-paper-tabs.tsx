@@ -22,11 +22,22 @@ export function HomePaperTabs({
     <div className="grid grid-cols-3 gap-2">
       {TABS.map((tab) => {
         const selected = active === tab.id;
-        const className = `flex min-h-[72px] items-center justify-center rounded-2xl border px-2 py-3 text-center text-[11px] font-medium leading-tight ${
+        const soon = tab.id === "past" || tab.id === "model";
+        const className = `flex min-h-[72px] flex-col items-center justify-center rounded-2xl border px-2 py-3 text-center text-[11px] font-medium leading-tight ${
           selected
             ? "border-teal-700 bg-teal-700 text-white"
             : "border-stone-200 bg-white text-stone-700 hover:border-teal-700 hover:bg-teal-50"
         }`;
+        const label = (
+          <>
+            {copy[tab.labelKey]}
+            {soon ? (
+              <span className={`mt-1 block text-[10px] font-normal ${selected ? "text-teal-100" : "text-stone-500"}`}>
+                {copy.comingSoon}
+              </span>
+            ) : null}
+          </>
+        );
         if (onSelect) {
           return (
             <button
@@ -35,13 +46,13 @@ export function HomePaperTabs({
               onClick={() => onSelect(tab.id)}
               className={className}
             >
-              {copy[tab.labelKey]}
+              {label}
             </button>
           );
         }
         return (
           <Link key={tab.id} href={tab.href} className={className}>
-            {copy[tab.labelKey]}
+            {label}
           </Link>
         );
       })}

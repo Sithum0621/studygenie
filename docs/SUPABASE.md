@@ -36,6 +36,13 @@ Dev server eka restart karanna.
 
 SQL Editor eke [`supabase/schema.sql`](../supabase/schema.sql) full eka run karanna. `IF NOT EXISTS` use karana nisa aye run karanna puluwan.
 
+**Already running project** ekak nam eke passe [`supabase/normalize.sql`](../supabase/normalize.sql) run karanna. Eken:
+
+- Teacher MCQ polls JSONB eken `mcq_poll_questions` + `mcq_poll_votes` + `mcq_poll_vote_answers` tables walata bedenawa
+- Teacher paper list `teacher_polls` table eke save wenawa (login una nam)
+- `class_students` / `class_assignments` / `study_paper_attempts` walata foreign keys
+- Guided learning completed topics `student_completed_topics` rows wela save wenawa
+
 Eken enawa:
 
 - `profiles` (`medium`, `language_mix` columns thiyenawa) — signup unama row auto hadenawa
@@ -51,6 +58,7 @@ Eken enawa:
   - `daily_task_plans`, `study_tasks`, `game_sessions`
 - Row Level Security: logged-in user only own `user_id` rows
 - Guided Learning: `curriculum_topics`, `topic_knowledge` (public read), `student_learning_state` (own `student_id`). Also in [`supabase/guided-learning.sql`](../supabase/guided-learning.sql). Seed Unit 4 with `python scripts/seed_guided_learning.py` (SQLite at `data/guided-learning/guided.db`).
+- Shared past / model papers: run [`supabase/past-papers-catalog.sql`](../supabase/past-papers-catalog.sql) so every student can read all MCQs in `study_papers` + `study_paper_questions`.
 
 Login una nam app eka **localStorage + Supabase dual-write**. Cloud eke data thiyenawanam eka hydrate wenawa; nathnam local data ekaparak push wenawa. Demo mode (keys nathuwa) localStorage witharak.
 

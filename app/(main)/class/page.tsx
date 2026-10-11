@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BookOpen, ClipboardList, ListChecks, Users } from "lucide-react";
+import { BookOpen, ClipboardList, FileText, ListChecks, Users } from "lucide-react";
+import { LatestPaperStats } from "@/components/latest-paper-stats";
 import { McqPollDropzone } from "@/components/mcq-poll-dropzone";
 import { Card, PageHeader } from "@/components/ui";
 import { loadAssignments, loadClasses, loadStudents } from "@/lib/class-room";
+import { localStore } from "@/lib/local-store";
 import { useCopy } from "@/lib/language-context";
 
 export default function ClassHomePage() {
@@ -14,6 +16,7 @@ export default function ClassHomePage() {
     classes: 0,
     students: 0,
     assignments: 0,
+    papers: 0,
   });
 
   useEffect(() => {
@@ -22,12 +25,19 @@ export default function ClassHomePage() {
         classes: loadClasses().length,
         students: loadStudents().length,
         assignments: loadAssignments().length,
+        papers: localStore.getMcqPolls().length,
       });
     }, 0);
     return () => window.clearTimeout(id);
   }, []);
 
   const items = [
+    {
+      href: "/class/papers",
+      label: copy.teacherPapers,
+      icon: FileText,
+      count: counts.papers,
+    },
     {
       href: "/class/classes",
       label: copy.classes,
@@ -56,7 +66,14 @@ export default function ClassHomePage() {
   return (
     <div className="space-y-6">
       <PageHeader title={copy.teacherHome} hint={copy.teacherHomeHint} />
+      <LatestPaperStats />
       <McqPollDropzone />
+      <Link
+        href="/class/papers/create"
+        className="inline-flex w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-3 text-sm font-medium text-white hover:bg-teal-800"
+      >
+        {copy.createOwnPapers}
+      </Link>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {items.map((item) => {
           const Icon = item.icon;

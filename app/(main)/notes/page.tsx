@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  Banner,
   Button,
   Card,
   Field,
@@ -31,7 +30,6 @@ export default function NotesPage() {
   );
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const [demoAi, setDemoAi] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,7 +79,6 @@ export default function NotesPage() {
         setError(copy.somethingWentWrong);
         return;
       }
-      if (data.demo) setDemoAi(true);
       setDraft({
         title: sanitizeText(data.title || topicText, 160),
         body: sanitizeMultiline(data.body || "", 20_000),
@@ -112,7 +109,6 @@ export default function NotesPage() {
   return (
     <div className="space-y-5">
       <PageHeader title={copy.notesTitle} hint={copy.notesHint} />
-      {demoAi ? <Banner>{copy.mockAiBanner}</Banner> : null}
       <Field label={copy.topic}>
         <Input maxLength={200} value={topic} onChange={(e) => setTopic(e.target.value)} />
       </Field>

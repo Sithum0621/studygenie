@@ -19,6 +19,7 @@ import {
   ensureTodayDailyQuiz,
   getCachedDailyQuiz,
   isDailyQuizGenerating,
+  isDailyQuizWaitingOnline,
   onDailyQuizChange,
 } from "@/lib/daily-quiz-job";
 import { litFires, nextDailyStreak } from "@/lib/growth";
@@ -48,6 +49,7 @@ export default function StudentDailyQuizPage() {
   const [doneToday, setDoneToday] = useState(false);
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [waitingOnline, setWaitingOnline] = useState(false);
   const [todayQuestions, setTodayQuestions] = useState<QuizQuestion[]>([]);
 
   function persistAttempt(next: DailyQuizAttempt) {
@@ -69,8 +71,8 @@ export default function StudentDailyQuizPage() {
     let unsubscribe: (() => void) | undefined;
     const id = window.setTimeout(() => {
       const progress = localStore.getProgress();
-      const today = todayStamp();
       const refresh = () => {
+        const today = todayStamp();
         const stored = localStore.getDailyQuizSet();
         const aiSet =
           getCachedDailyQuiz(today, language) ||
@@ -78,8 +80,25 @@ export default function StudentDailyQuizPage() {
             ? stored
             : null);
         setTodayQuestions(aiSet?.questions || []);
+        const waiting = !(aiSet && aiSet.questions.length) && isDailyQuizWaitingOnline();
+        setWaitingOnline(waiting);
         setPreparing(
-          !(aiSet && aiSet.questions.length) && isDailyQuizGenerating(),
+          !(aiSet && aiSet.questions.length) &&
+            (isDailyQuizGenerating() || waiting),
+        );
+        const attempt = localStore.getDailyQuizAttempt();
+        if (attempt && attempt.date !== today) {
+          setStage("ready");
+          setQuestions([]);
+          setAnswers([]);
+          setIndex(0);
+          setSelected(null);
+          setRevealed(false);
+          setScore(null);
+        }
+        setDoneToday(
+          progress.dailyQuizDate === today ||
+            (attempt?.date === today && attempt.completed),
         );
       };
       refresh();
@@ -89,6 +108,7 @@ export default function StudentDailyQuizPage() {
       setDailyStreak(progress.dailyStreak || 0);
       setLastScore(progress.lastQuizScore);
 
+      const today = todayStamp();
       const attempt = localStore.getDailyQuizAttempt();
       const finished =
         progress.dailyQuizDate === today ||
@@ -304,7 +324,9 @@ export default function StudentDailyQuizPage() {
         <Card className="flex flex-col items-center gap-3 py-10 text-center">
           <span className="h-8 w-8 animate-spin rounded-full border-2 border-stone-200 border-t-teal-700" />
           <p className="text-sm font-medium text-stone-700">
-            {copy.dailyQuizPreparing}
+            {waitingOnline
+              ? copy.dailyQuizWaitingOnline
+              : copy.dailyQuizPreparing}
           </p>
         </Card>
       ) : null}
@@ -319,7 +341,9 @@ export default function StudentDailyQuizPage() {
               <p className="mt-1 text-sm text-stone-600">
                 {doneToday
                   ? `${copy.dailyQuizDone}${lastScore != null ? ` · ${lastScore}%` : ""}`
-                  : preparing
+                  : waitingOnline
+                    ? copy.dailyQuizWaitingOnline
+                    : preparing
                     ? copy.dailyQuizPreparing
                     : copy.dailyQuizHint}
               </p>

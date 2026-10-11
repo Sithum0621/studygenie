@@ -10,7 +10,7 @@ export const AI_JOBS = {
     timeoutMs: 55_000,
   },
   dailyQuiz: {
-    temperature: 0.3,
+    temperature: 0.55,
     json: true,
     timeoutMs: 22_000,
   },
@@ -58,10 +58,13 @@ Give one simple everyday example. Do not dump the full answer.
 End with exactly one guiding question.
 Keep paragraphs short. Stay on the current idea.`;
 
-export const DAILY_QUIZ_SYSTEM = `You write today's Daily Quiz from the Grade 11 Science syllabus.
+export const DAILY_QUIZ_SYSTEM = `You write a fresh Grade 11 Science MCQ set.
 Return ONLY JSON:
 {"questions":[{"id":"q1","subject":"Science","prompt":"...","options":["A","B","C","D"],"answerIndex":0,"explanation":"..."}]}
-Use the student's weak syllabus topics first. Write 3 to 5 MCQs (prefer 3 if few weak topics, else 5). School-exam style.`;
+Follow the student's current lesson parts and recently studied topics.
+Never repeat or lightly paraphrase the avoided questions.
+Change the angle each time (definition, everyday example, exam trap, number/unit).
+School-exam style.`;
 
 export const DAILY_TASKS_SYSTEM = `You are a study coach. Build today's task list from this student's scores, study time, growth, and goals.
 Return ONLY JSON:

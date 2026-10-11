@@ -1229,7 +1229,7 @@ export async function completeWithGeminiMedia(
 
   const b64 = Buffer.from(bytes).toString("base64");
   let lastError = "";
-  const authHeaders = [
+  const authHeaders: Record<string, string>[] = [
     { Authorization: `Bearer ${key}` },
     { "x-goog-api-key": key },
   ];

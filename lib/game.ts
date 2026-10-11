@@ -1,5 +1,4 @@
 import {
-  contentScriptForSubject,
   hasSinhalaScript,
   hasTamilScript,
   isSinhalaEnglishMix,
@@ -8,12 +7,22 @@ import {
 } from "./content-language";
 import type { AppLanguage } from "./copy";
 import {
+  normalizeQuizQuestions,
+  quizMatchesAppLanguage,
   scienceDailyFallback,
   shuffleQuestionOptions,
 } from "./daily-questions";
 import { localStore } from "./local-store";
-import { seedPapers } from "./papers";
-import type { QuizQuestion, StudyMedium } from "./types";
+import {
+  dropSeenQuestions,
+  recentAvoidPrompts,
+  rememberQuestions,
+  uniqueQuestions,
+} from "./question-memory";
+import { pickScienceMcqs } from "./science-mcq-bank";
+import { buildStudentSnapshot } from "./student-context";
+import { collectStudyFocuses } from "./study-chats";
+import type { Profile, QuizQuestion, StudyMedium } from "./types";
 
 function tamilScienceFallback(): QuizQuestion[] {
   return [
@@ -107,50 +116,84 @@ export function pickGameQuestions(
   language: AppLanguage = "singlish",
   medium: StudyMedium = "sinhala",
   _subjects: string[] = [],
+  seed = `${Date.now()}`,
 ): QuizQuestion[] {
-  const script = contentScriptForSubject("Science", medium, language);
-  let pool: QuizQuestion[] = [];
-
-  if (script === "english") {
-    pool = seedPapers().flatMap((paper) =>
-      paper.questions.map((question) => ({
-        ...question,
-        subject: question.subject || paper.subject,
-      })),
-    );
-  } else {
-    const quizLanguage = language === "english" ? "english" : "singlish";
-    const fallback = fallbackBank(language, medium);
-    pool = [...fallback, ...fallback.map((row) => ({ ...row, id: `${row.id}_b` }))];
-    const cached = localStore.getDailyQuizSet();
-    if (
-      cached?.questions.length &&
-      cached.language === quizLanguage &&
-      (!cached.medium || cached.medium === parseStudyMedium(medium))
-    ) {
-      pool = [...cached.questions, ...pool];
-    }
-    pool = pool.filter((question) => {
-      const kind = languageSubjectKind(question.subject || "");
-      if (kind === "english") return true;
-      if (kind === "tamil") return hasTamilScript(question.prompt);
-      if (kind === "sinhala") return hasSinhalaScript(question.prompt);
-      return isSinhalaEnglishMix(questionMixText(question));
-    });
-    if (!pool.length) pool = fallback;
-  }
-
-  const unique = new Map<string, QuizQuestion>();
-  for (const question of pool) {
-    if (!question.prompt.trim()) continue;
-    unique.set(`${question.subject}:${question.prompt}`, question);
-  }
-
-  const rows = shuffle([...unique.values()]);
-  const safe = rows.length ? rows : fallbackBank(language, medium);
-  if (!safe.length) return [];
-  return Array.from({ length: size }, (_, index) => {
-    const row = safe[index % safe.length];
-    return shuffleQuestionOptions({ ...row, id: `${row.id}_${index}` });
+  const avoid = recentAvoidPrompts();
+  const topics = collectStudyFocuses().map((row) => row.topic);
+  const bank = pickScienceMcqs({
+    language,
+    medium,
+    size: Math.max(size, 12),
+    seed,
+    avoid,
+    topics,
   });
+  const pool = uniqueQuestions(
+    dropSeenQuestions(
+      [
+        ...bank,
+        ...fallbackBank(language, medium),
+      ].filter((question) => {
+        if (!question.prompt.trim()) return false;
+        const kind = languageSubjectKind(question.subject || "");
+        if (kind === "english") return true;
+        if (kind === "tamil") return hasTamilScript(question.prompt);
+        if (kind === "sinhala") return hasSinhalaScript(question.prompt);
+        return isSinhalaEnglishMix(questionMixText(question));
+      }),
+      avoid,
+    ),
+  );
+  const safe = uniqueQuestions(
+    shuffle(pool.length ? pool : bank.length ? bank : fallbackBank(language, medium)),
+  );
+  const picked = safe.slice(0, size);
+  return picked.map((row, index) =>
+    shuffleQuestionOptions({ ...row, id: `${row.id}_${seed}_${index}` }),
+  );
+}
+
+export async function fetchGameQuestions(
+  size = 8,
+  language: AppLanguage = "singlish",
+  user: Profile | null = null,
+): Promise<QuizQuestion[]> {
+  const medium = parseStudyMedium(user?.medium);
+  const roundId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const local = pickGameQuestions(size, language, medium, user?.subjects ?? [], roundId);
+  try {
+    const res = await fetch("/api/daily-quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(20_000),
+      body: JSON.stringify({
+        language,
+        purpose: "game",
+        roundId,
+        avoidPrompts: recentAvoidPrompts(),
+        student: buildStudentSnapshot(user, user?.subjects?.join(" ")),
+      }),
+    });
+    const data = (await res.json()) as { questions?: unknown };
+    const questions = uniqueQuestions(
+      dropSeenQuestions(
+        normalizeQuizQuestions(data.questions, size),
+        recentAvoidPrompts(),
+      ),
+    );
+    const usable =
+      questions.length >= 6 && quizMatchesAppLanguage(questions, language)
+        ? questions.slice(0, size)
+        : uniqueQuestions([...questions, ...local]).slice(0, size);
+    if (usable.length) {
+      rememberQuestions(usable);
+      return usable.map((row, index) =>
+        shuffleQuestionOptions({ ...row, id: `${row.id}_g_${index}` }),
+      );
+    }
+  } catch {
+    /* local round */
+  }
+  rememberQuestions(local);
+  return local;
 }
