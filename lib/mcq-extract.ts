@@ -304,7 +304,7 @@ export async function extractMcqFromFile(input: {
     }
   }
 
-  if (isAiConfigured() && !(process.env.VERCEL && mime.startsWith("image/"))) {
+  if (isAiConfigured()) {
     try {
       const transcript = await transcribePaper({ bytes, mime });
       if (transcript) {

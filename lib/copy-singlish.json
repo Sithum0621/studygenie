@@ -336,7 +336,7 @@
   "pollSubmit": "Answers submit කරන්න",
   "pollThanks": "Vote එක ගියා. Class එකේ poll results මෙතනයි.",
   "pollNotFound": "මේ link එකෙන් poll එකක් නැහැ.",
-  "pollNoQuestions": "මේ paper එකෙන් MCQ හොයාගන්න බැරි උනා. පිටුවේ (1)(2)(3)(4) options පේනවද බලන්න. නැත්නම් එක පිටුවක photo එකක් (අකුරු පැහැදිලිව) try කරන්න.",
+  "pollNoQuestions": "මේ file එකෙන් MCQ කියවන්න බැරි උනා. එක පිටුවක paper photo එකක් ආයෙත් try කරන්න, නැත්නම් Create own එකෙන් හදන්න.",
   "pollExtractFail": "File එක කියවන්න බැරි උනා. පස්සේ try කරන්න.",
   "pollSelectFile": "PDF හෝ image select කරන්න",
   "pollQuestions": "Questions",

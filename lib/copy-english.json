@@ -336,7 +336,7 @@
   "pollSubmit": "Submit answers",
   "pollThanks": "Vote in. Class poll results are below.",
   "pollNotFound": "No poll on this link.",
-  "pollNoQuestions": "Could not find MCQs in this paper. Check that (1)(2)(3)(4) options are visible, or try a clear photo of one page.",
+  "pollNoQuestions": "Could not read MCQs from this file. Try one page of the paper again, or create the questions yourself.",
   "pollExtractFail": "Could not read the file. Try again in a bit.",
   "pollSelectFile": "Select a PDF or image",
   "pollQuestions": "Questions",

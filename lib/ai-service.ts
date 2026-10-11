@@ -9,6 +9,7 @@ import {
   AI_JOBS,
   DAILY_QUIZ_SYSTEM,
   DAILY_TASKS_SYSTEM,
+  IMAGE_OCR_SYSTEM,
   OCR_SYSTEM,
   OCR_TRANSCRIBE_SYSTEM,
   OCR_TRANSCRIBE_USER,
@@ -31,7 +32,9 @@ export async function transcribePaper(input: {
   mime: string;
 }) {
   const job = AI_JOBS.ocr;
-  const chunkTimeout = Math.min(40_000, job.timeoutMs);
+  const chunkTimeout = process.env.VERCEL
+    ? Math.min(25_000, job.timeoutMs)
+    : Math.min(40_000, job.timeoutMs);
   const prepared =
     input.mime === "image/png" ? preparePaperPng(input.bytes) : null;
   const serverless = Boolean(process.env.VERCEL);
@@ -97,12 +100,12 @@ export async function extractMcqsFromImage(
   fileName: string,
 ) {
   const job = AI_JOBS.ocr;
-  const timeout = Math.min(45_000, job.timeoutMs);
+  const timeout = Math.min(32_000, job.timeoutMs);
   const prepared =
     mime === "image/png" ? preparePaperPng(bytes, 1) : null;
   const slice = prepared?.full || bytes;
   const sliceMime = prepared ? "image/png" : mime;
-  const prompt = `File: ${fileName}\nRead THIS paper image only. Return JSON MCQs from the printed questions.`;
+  const prompt = `File: ${fileName}\nRead THIS paper photo. Copy every printed MCQ in reading order. Keep Sinhala letters exactly.`;
   try {
     const media = await completeWithGeminiMedia(
       prompt,
@@ -111,7 +114,7 @@ export async function extractMcqsFromImage(
       timeout,
       job.temperature,
       true,
-      OCR_SYSTEM,
+      IMAGE_OCR_SYSTEM,
     );
     if (media && media.trim().length > 20) return media;
   } catch {
@@ -119,7 +122,7 @@ export async function extractMcqsFromImage(
   }
   if (!sliceMime.startsWith("image/")) return null;
   return completeWithAiVision(
-    `${OCR_SYSTEM}\n\n${prompt}`,
+    `${IMAGE_OCR_SYSTEM}\n\n${prompt}`,
     slice,
     sliceMime,
     timeout,

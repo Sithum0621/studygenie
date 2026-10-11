@@ -37,6 +37,22 @@ First line: NUMBERS_SEEN: then every digit, unit, and chemical formula visible (
 Then the full page as plain text in print order.
 Do not write JSON. Do not write a memorized past paper. Do not invent questions.`;
 
+export const IMAGE_OCR_SYSTEM = `You read a photographed exam paper. You are a photocopier, not a teacher.
+The attached image is the only source. Do not recall a past paper from memory.
+Copy printed Sinhala, English, or Tamil exactly, including න් / ්‍ය / chemical formulas.
+
+Return ONLY JSON:
+{"title":"short title from the page","questions":[{"prompt":"...","options":["...","...","...","..."],"answerIndex":0}]}
+
+STRICT:
+- prompt = stem only. Never put (1)(2)(3)(4) / A B C D inside prompt.
+- options = each printed choice as its own array item, without (1) or A) prefixes.
+- Keep option order as printed. 2-6 options.
+- Do not paraphrase or translate.
+- If one word is a bit faint, copy the closest printed letters. Skip a question only if two or more options are unreadable.
+- Skip essay items with no choices. Max 25 questions.
+- If the page has no MCQs, return {"title":"","questions":[]}.`;
+
 export const OCR_SYSTEM = `Turn this OCR transcript into JSON MCQs.
 Use ONLY words that appear in the transcript. You may not use Science knowledge.
 If a stem or option is not clearly in the transcript, skip that question.
