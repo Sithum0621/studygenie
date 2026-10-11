@@ -3,7 +3,9 @@ import path from "node:path";
 import { createServerSupabase } from "./supabase/server";
 import type { McqPoll, McqPollQuestion, McqPollSummary, McqPollVote, PollQuestionStat } from "./types";
 
-const DIR = path.join(process.cwd(), "data", "mcq-polls");
+const DIR = process.env.VERCEL
+  ? path.join("/tmp", "mcq-polls")
+  : path.join(process.cwd(), "data", "mcq-polls");
 
 function codeOf() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
@@ -77,13 +79,17 @@ async function savePollRows(
   };
   if (ownerId) header.owner_id = ownerId;
 
-  await supabase.from("mcq_polls").upsert(header);
+  const { error: headerError } = await supabase.from("mcq_polls").upsert(header);
+  if (headerError) {
+    console.error("mcq_polls upsert", headerError.message);
+    return false;
+  }
 
   const { error: questionError } = await supabase
     .from("mcq_poll_questions")
     .delete()
     .eq("poll_id", poll.id);
-  if (questionError) return;
+  if (questionError) return true;
 
   if (poll.questions.length) {
     const { error } = await supabase.from("mcq_poll_questions").insert(
@@ -96,7 +102,7 @@ async function savePollRows(
         sort_order: index,
       })),
     );
-    if (error) return;
+    if (error) return true;
   }
 
   await supabase.from("mcq_poll_votes").delete().eq("poll_id", poll.id);
@@ -108,7 +114,7 @@ async function savePollRows(
       created_at: vote.createdAt,
     }));
     const { error: voteError } = await supabase.from("mcq_poll_votes").insert(votes);
-    if (voteError) return;
+    if (voteError) return true;
     const answers = poll.votes.flatMap((vote) =>
       vote.answers
         .map((optionIndex, questionIndex) => {
@@ -140,6 +146,7 @@ async function savePollRows(
       created_at: poll.createdAt,
     });
   }
+  return true;
 }
 
 async function readPollFromDb(code: string): Promise<McqPoll | null> {
@@ -203,13 +210,36 @@ async function readPollFromDb(code: string): Promise<McqPoll | null> {
   };
 }
 
+async function writePollFile(poll: McqPoll) {
+  try {
+    await ensureDir();
+    await writeFile(filePath(poll.code), JSON.stringify(poll), "utf8");
+  } catch (error) {
+    console.error(
+      "poll file",
+      error instanceof Error ? error.message.slice(0, 180) : "fs",
+    );
+  }
+}
+
+async function supabaseClient() {
+  try {
+    return await createServerSupabase();
+  } catch (error) {
+    console.error(
+      "poll supabase",
+      error instanceof Error ? error.message.slice(0, 180) : "supabase",
+    );
+    return null;
+  }
+}
+
 export async function savePoll(poll: McqPoll) {
-  await ensureDir();
-  await writeFile(filePath(poll.code), JSON.stringify(poll), "utf8");
-  const supabase = await createServerSupabase();
+  const supabase = await supabaseClient();
   if (supabase) {
     await savePollRows(poll, supabase);
   }
+  await writePollFile(poll);
   return poll;
 }
 
@@ -234,14 +264,20 @@ export async function createPoll(input: {
 export async function readPoll(code: string) {
   const safe = code.replace(/[^a-zA-Z0-9]/g, "");
   if (safe.length < 8) return null;
+  if (process.env.VERCEL) {
+    const fromDb = await readPollFromDb(safe);
+    if (fromDb) {
+      await writePollFile(fromDb);
+      return fromDb;
+    }
+  }
   try {
     const raw = await readFile(filePath(safe), "utf8");
     return JSON.parse(raw) as McqPoll;
   } catch {
     const poll = await readPollFromDb(safe);
     if (!poll) return null;
-    await ensureDir();
-    await writeFile(filePath(poll.code), JSON.stringify(poll), "utf8");
+    await writePollFile(poll);
     return poll;
   }
 }

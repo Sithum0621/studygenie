@@ -34,9 +34,11 @@ export async function transcribePaper(input: {
   const chunkTimeout = Math.min(40_000, job.timeoutMs);
   const prepared =
     input.mime === "image/png" ? preparePaperPng(input.bytes) : null;
+  const serverless = Boolean(process.env.VERCEL);
   const slices =
-    prepared?.bands.map((bytes) => ({ bytes, mime: "image/png" as const })) ||
-    [{ bytes: prepared?.full || input.bytes, mime: input.mime }];
+    !serverless && prepared?.bands.length
+      ? prepared.bands.map((bytes) => ({ bytes, mime: "image/png" as const }))
+      : [{ bytes: prepared?.full || input.bytes, mime: prepared ? "image/png" : input.mime }];
 
   const readWindow = async (
     window: string,
@@ -86,6 +88,43 @@ export async function transcribePaper(input: {
   return readWindow(
     "Transcribe the full page as plain text in print order.",
     { bytes: prepared?.full || input.bytes, mime: prepared ? "image/png" : input.mime },
+  );
+}
+
+export async function extractMcqsFromImage(
+  bytes: Uint8Array,
+  mime: string,
+  fileName: string,
+) {
+  const job = AI_JOBS.ocr;
+  const timeout = Math.min(45_000, job.timeoutMs);
+  const prepared =
+    mime === "image/png" ? preparePaperPng(bytes, 1) : null;
+  const slice = prepared?.full || bytes;
+  const sliceMime = prepared ? "image/png" : mime;
+  const prompt = `File: ${fileName}\nRead THIS paper image only. Return JSON MCQs from the printed questions.`;
+  try {
+    const media = await completeWithGeminiMedia(
+      prompt,
+      slice,
+      sliceMime,
+      timeout,
+      job.temperature,
+      true,
+      OCR_SYSTEM,
+    );
+    if (media && media.trim().length > 20) return media;
+  } catch {
+    // Vision fallback below
+  }
+  if (!sliceMime.startsWith("image/")) return null;
+  return completeWithAiVision(
+    `${OCR_SYSTEM}\n\n${prompt}`,
+    slice,
+    sliceMime,
+    timeout,
+    job.temperature,
+    true,
   );
 }
 

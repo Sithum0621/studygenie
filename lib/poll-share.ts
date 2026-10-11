@@ -1,4 +1,5 @@
 import { localStore } from "./local-store";
+import { encodePollShare } from "./poll-payload";
 import type { McqPollSummary } from "./types";
 
 const listeners = new Set<() => void>();
@@ -12,8 +13,12 @@ function emitTeacherPolls() {
   listeners.forEach((listener) => listener());
 }
 
-export function pollShareUrl(origin: string, code: string) {
-  return `${origin.replace(/\/$/, "")}/p/${code}`;
+export function pollShareUrl(origin: string, poll: McqPollSummary | string) {
+  const code = typeof poll === "string" ? poll : poll.code;
+  const payload =
+    typeof poll === "string" ? "" : encodePollShare(poll);
+  const base = `${origin.replace(/\/$/, "")}/p/${code}`;
+  return payload ? `${base}?s=${payload}` : base;
 }
 
 export function whatsappShareHref(url: string, title: string) {

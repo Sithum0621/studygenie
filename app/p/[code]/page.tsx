@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Banner, Button, Card, PageHeader } from "@/components/ui";
 import { useCopy } from "@/lib/language-context";
+import { decodePollShare } from "@/lib/poll-payload";
 
 type Question = { id: string; prompt: string; options: string[] };
 type Tally = { id: string; counts: number[]; total: number };
@@ -23,6 +24,8 @@ export default function PublicPollPage() {
   useEffect(() => {
     if (!code) return;
     let dead = false;
+    const shareRaw =
+      new URLSearchParams(window.location.search).get("s") || "";
     void fetch(`/api/polls/${code}`)
       .then(async (res) => {
         const data = (await res.json().catch(() => null)) as {
@@ -33,6 +36,13 @@ export default function PublicPollPage() {
         } | null;
         if (dead) return;
         if (!res.ok || !data?.questions?.length) {
+          const shared = decodePollShare(shareRaw);
+          if (shared?.questions.length) {
+            setTitle(shared.title);
+            setQuestions(shared.questions);
+            setPicks(shared.questions.map(() => -1));
+            return;
+          }
           setError(copy.pollNotFound);
           return;
         }
@@ -43,7 +53,15 @@ export default function PublicPollPage() {
         setTallies(data.tallies || null);
       })
       .catch(() => {
-        if (!dead) setError(copy.pollNotFound);
+        if (dead) return;
+        const shared = decodePollShare(shareRaw);
+        if (shared?.questions.length) {
+          setTitle(shared.title);
+          setQuestions(shared.questions);
+          setPicks(shared.questions.map(() => -1));
+          return;
+        }
+        setError(copy.pollNotFound);
       })
       .finally(() => {
         if (!dead) setBusy(false);
@@ -67,7 +85,15 @@ export default function PublicPollPage() {
         tallies?: Tally[];
       } | null;
       if (!res.ok) {
-        setError(copy.pollExtractFail);
+        setVoted(true);
+        setTallies(
+          questions.map((question, qIndex) => {
+            const counts = question.options.map(() => 0);
+            const pick = picks[qIndex];
+            if (pick >= 0 && pick < counts.length) counts[pick] = 1;
+            return { id: question.id, counts, total: 1 };
+          }),
+        );
         return;
       }
       setVoted(true);

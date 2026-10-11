@@ -50,18 +50,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "noQuestions" }, { status: 422 });
   }
 
-  const poll = await createPoll({
-    title: sanitizeText(parsed.data.title || "", 120) || "MCQ poll",
-    fileName: sanitizeText(parsed.data.fileName || "paper", 160),
-    questions,
-  });
+  try {
+    const poll = await createPoll({
+      title: sanitizeText(parsed.data.title || "", 120) || "MCQ poll",
+      fileName: sanitizeText(parsed.data.fileName || "paper", 160),
+      questions,
+    });
 
-  return NextResponse.json({
-    poll: toSummary(poll),
-    questions: poll.questions.map((question) => ({
-      id: question.id,
-      prompt: question.prompt,
-      options: question.options,
-    })),
-  });
+    return NextResponse.json({
+      poll: { ...toSummary(poll), questions: poll.questions },
+      questions: poll.questions.map((question) => ({
+        id: question.id,
+        prompt: question.prompt,
+        options: question.options,
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "poll create",
+      error instanceof Error ? error.message.slice(0, 180) : "create",
+    );
+    return NextResponse.json({ error: "saveFailed" }, { status: 500 });
+  }
 }

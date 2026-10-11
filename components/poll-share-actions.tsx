@@ -38,7 +38,7 @@ export function PollShareActions({
 }) {
   const copy = useCopy();
   const [copied, setCopied] = useState(false);
-  const url = pollShareUrl(origin, poll.code);
+  const url = pollShareUrl(origin, poll);
   const className = compact ? "gap-1.5 px-3 py-2 text-xs" : "gap-2";
 
   function persist() {
@@ -108,7 +108,7 @@ export function PollShareDialog({
   onSaved?: (items: McqPollSummary[]) => void;
 }) {
   const copy = useCopy();
-  const url = pollShareUrl(origin, poll.code);
+  const url = pollShareUrl(origin, poll);
 
   if (!open) return null;
 

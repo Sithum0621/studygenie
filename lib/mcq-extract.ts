@@ -1,4 +1,8 @@
-import { extractMcqsFromText, transcribePaper } from "./ai-service";
+import {
+  extractMcqsFromImage,
+  extractMcqsFromText,
+  transcribePaper,
+} from "./ai-service";
 import { isAiConfigured, parseAiJson } from "./ai";
 import { extractPdfText } from "./pdf-extract";
 import { sanitizeMultiline, sanitizeText } from "./validate";
@@ -267,6 +271,19 @@ export async function extractMcqFromFile(input: {
 }) {
   const { bytes, fileName, mime } = input;
 
+  if (mime.startsWith("image/") && isAiConfigured()) {
+    try {
+      const raw = await extractMcqsFromImage(bytes, mime, fileName);
+      const parsed = parseExtracted(raw, fileName);
+      if (parsed.questions.length) return parsed;
+    } catch (error) {
+      console.error(
+        "poll image",
+        error instanceof Error ? error.message.slice(0, 180) : "image",
+      );
+    }
+  }
+
   if (mime === "application/pdf") {
     try {
       const text = sanitizeMultiline(await extractPdfText(bytes), 40_000);
@@ -287,7 +304,7 @@ export async function extractMcqFromFile(input: {
     }
   }
 
-  if (isAiConfigured()) {
+  if (isAiConfigured() && !(process.env.VERCEL && mime.startsWith("image/"))) {
     try {
       const transcript = await transcribePaper({ bytes, mime });
       if (transcript) {

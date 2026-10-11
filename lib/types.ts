@@ -310,6 +310,7 @@ export type McqPollSummary = {
   questionCount: number;
   voteCount: number;
   createdAt: string;
+  questions?: McqPollQuestion[];
 };
 
 export type PollQuestionStat = {

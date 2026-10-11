@@ -7,6 +7,7 @@ import { PollShareDialog } from "@/components/poll-share-actions";
 import { useCopy } from "@/lib/language-context";
 import { localStore } from "@/lib/local-store";
 import { saveTeacherPoll } from "@/lib/poll-share";
+import { preparePollFile } from "@/lib/poll-upload";
 import type { McqPollQuestion, McqPollSummary } from "@/lib/types";
 import {
   inspectPollUpload,
@@ -54,8 +55,13 @@ export function McqPollDropzone() {
     }
     setBusy(true);
     try {
+      const ready = await preparePollFile(file);
       const form = new FormData();
-      form.append("file", file, check.fileName);
+      const uploadName =
+        ready.type === "image/jpeg" && ready !== file
+          ? check.fileName.replace(/\.[^.]+$/, ".jpg")
+          : check.fileName;
+      form.append("file", ready, uploadName);
       const res = await fetch("/api/polls/extract", { method: "POST", body: form });
       const data = (await res.json().catch(() => null)) as {
         error?: string;
